@@ -4,14 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Release version (example: 0.3.1)
+        description: 'Release version (example: 0.4.0)'
         required: true
-        default: 0.3.1
+        type: string
+        default: '0.4.0'
+
       publish_release:
-        description: Publish GitHub Release
+        description: 'Publish GitHub Release'
         required: true
         type: boolean
         default: true
+
   push:
     tags:
       - 'v*'
@@ -19,6 +22,7 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+
     permissions:
       contents: write
 
@@ -26,7 +30,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python 3.12
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -39,20 +43,48 @@ jobs:
           } else {
             $version = '${{ github.ref_name }}'.TrimStart('v')
           }
-          "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+          "RELEASE_VERSION=$version" | Out-File `
+            -FilePath $env:GITHUB_ENV `
+            -Append
 
           $versionFile = Get-Content version.py -Raw
-          $versionFile = $versionFile -replace "APP_VERSION = '[^']+'", "APP_VERSION = '$version'"
-          Set-Content version.py $versionFile -Encoding UTF8
+
+          $versionFile = $versionFile -replace `
+            "APP_VERSION = '[^']+'", `
+            "APP_VERSION = '$version'"
+
+          Set-Content `
+            version.py `
+            $versionFile `
+            -Encoding UTF8
 
           $manifestPath = 'extension/manifest.json'
-          $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+
+          $manifest = Get-Content `
+            $manifestPath `
+            -Raw |
+            ConvertFrom-Json
+
           $manifest.version = $version
-          $manifest | ConvertTo-Json -Depth 20 | Set-Content $manifestPath -Encoding UTF8
+
+          $manifest |
+            ConvertTo-Json -Depth 20 |
+            Set-Content `
+              $manifestPath `
+              -Encoding UTF8
 
       - name: Build app
         shell: cmd
         run: build.bat
+
+      - name: Build updater
+        shell: cmd
+        run: build_updater.bat
+
+      - name: Build uninstaller
+        shell: cmd
+        run: build_uninstaller.bat
 
       - name: Build Setup EXE
         shell: cmd
@@ -74,16 +106,25 @@ jobs:
             website/downloads/ChzzkAutoCategory-*.zip
 
       - name: Publish GitHub Release
-        if: github.event_name == 'push' || inputs.publish_release == true
+        if: >
+          github.event_name == 'push' ||
+          (github.event_name == 'workflow_dispatch' && inputs.publish_release)
         shell: pwsh
+
         env:
           GH_TOKEN: ${{ github.token }}
+
         run: |
           $tag = "v$env:RELEASE_VERSION"
+
           gh release view $tag 2>$null
+
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --title "CHZZK Auto Category $env:RELEASE_VERSION" --generate-notes
+            gh release create $tag `
+              --title "CHZZK Auto Category $env:RELEASE_VERSION" `
+              --generate-notes
           }
+
           gh release upload $tag `
             "website/downloads/ChzzkAutoCategory-$env:RELEASE_VERSION.zip" `
             "website/downloads/ChzzkAutoCategory-Setup.exe" `
