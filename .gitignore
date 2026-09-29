@@ -1,0 +1,11 @@
+.venv/
+.venv-installer/
+
+build/
+dist/
+dist-installer/
+
+__pycache__/
+*.pyc
+
+*.spec
