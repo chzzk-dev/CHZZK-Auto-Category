@@ -1,0 +1,92 @@
+name: Build Windows Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version (example: 0.3.1)
+        required: true
+        default: 0.3.1
+      publish_release:
+        description: Publish GitHub Release
+        required: true
+        type: boolean
+        default: true
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Resolve version
+        shell: pwsh
+        run: |
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            $version = '${{ inputs.version }}'
+          } else {
+            $version = '${{ github.ref_name }}'.TrimStart('v')
+          }
+          "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+          $versionFile = Get-Content version.py -Raw
+          $versionFile = $versionFile -replace "APP_VERSION = '[^']+'", "APP_VERSION = '$version'"
+          Set-Content version.py $versionFile -Encoding UTF8
+
+          $manifestPath = 'extension/manifest.json'
+          $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+          $manifest.version = $version
+          $manifest | ConvertTo-Json -Depth 20 | Set-Content $manifestPath -Encoding UTF8
+
+      - name: Build app
+        shell: cmd
+        run: build.bat
+
+      - name: Build Setup EXE
+        shell: cmd
+        run: installer\build_installer.bat
+
+      - name: Create release assets
+        shell: cmd
+        run: .venv\Scripts\python.exe release.py --version %RELEASE_VERSION%
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CHZZK-Auto-Category-Windows-${{ env.RELEASE_VERSION }}
+          if-no-files-found: error
+          path: |
+            website/downloads/latest.json
+            website/downloads/SHA256SUMS.txt
+            website/downloads/ChzzkAutoCategory-Setup.exe
+            website/downloads/ChzzkAutoCategory-*.zip
+
+      - name: Publish GitHub Release
+        if: github.event_name == 'push' || inputs.publish_release == true
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "v$env:RELEASE_VERSION"
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --title "CHZZK Auto Category $env:RELEASE_VERSION" --generate-notes
+          }
+          gh release upload $tag `
+            "website/downloads/ChzzkAutoCategory-$env:RELEASE_VERSION.zip" `
+            "website/downloads/ChzzkAutoCategory-Setup.exe" `
+            "website/downloads/SHA256SUMS.txt" `
+            "website/downloads/latest.json" `
+            --clobber
