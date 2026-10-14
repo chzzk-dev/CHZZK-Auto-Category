@@ -31,7 +31,7 @@ build_release.bat
 
 릴리스마다 `RELEASE_NOTES-버전.md`를 만들고 같은 내용을 릴리스 설명에 넣습니다. 게시 성공 후에는 저장소의 [CHANGELOG.md](CHANGELOG.md)에 버전, 한국 시간 기준 날짜와 커밋 목록을 자동으로 기록합니다. `미배포` 항목에 적어 둔 변경 설명도 포함합니다.
 
-공개 소스에는 Client Secret을 넣지 않습니다. 릴리스 빌드 전에 저장소 Actions secret `CHZZK_CLIENT_SECRET`을 설정하세요. 빌드할 때만 컴파일 대상에 주입하므로 사용자에게 ID/Secret 입력란을 표시하지 않습니다. 상세 절차는 [GITHUB_RELEASE.md](GITHUB_RELEASE.md)를 참고하세요.
+공개 소스에는 인증 값을 넣지 않습니다. 릴리스 빌드 전에 저장소 Actions Secret `CHZZK_CLIENT_ID`와 `CHZZK_CLIENT_SECRET`을 설정하세요. 빌드할 때만 컴파일 대상에 주입하므로 사용자에게 ID/Secret 입력란을 표시하지 않습니다. 상세 절차는 [GITHUB_RELEASE.md](GITHUB_RELEASE.md)를 참고하세요.
 
 ## 설치 화면이 닫히는 경우
 

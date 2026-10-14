@@ -4,9 +4,9 @@
 
 ## 최초 설정
 
-저장소 **Settings → Secrets and variables → Actions → New repository secret**에서 `CHZZK_CLIENT_SECRET`을 등록하세요. Secret 값은 소스, 커밋, Markdown에 쓰지 않습니다. Client ID는 공개 소스의 고정값을 사용하며 변경하려면 Actions variable `CHZZK_CLIENT_ID`를 설정합니다.
+저장소 **Settings → Secrets and variables → Actions → New repository secret**에서 `CHZZK_CLIENT_ID`와 `CHZZK_CLIENT_SECRET`을 각각 등록하세요. workflow는 두 값 모두 Actions Secret에서 읽습니다. Secret 값은 소스, 커밋, Markdown에 쓰지 않습니다.
 
-Secret이 없는 일반 빌드도 테스트 및 MSI 생성은 가능합니다. 그 빌드에는 공식 API 연결 정보가 포함되지 않습니다. 실제 릴리스 게시에는 Secret 설정이 필수입니다. 앱 설정 화면에 ID/Secret 입력란은 추가하지 않습니다.
+Secret이 없는 일반 빌드도 테스트 및 MSI 생성은 가능합니다. 그 빌드에는 공식 API 연결 정보가 포함되지 않습니다. 실제 릴리스 게시에는 두 Secret 설정이 모두 필수입니다. 앱 설정 화면에 ID/Secret 입력란은 추가하지 않습니다.
 
 ## 새 버전 게시
 
@@ -30,6 +30,6 @@ main/PR 업로드와 기본 수동 실행은 빌드만 합니다. 태그 또는 
 
 ## 로컬 빌드
 
-같은 빌드 환경에서 환경변수 `CHZZK_CLIENT_SECRET`을 설정한 뒤 `build_release.bat`을 실행합니다. 결과는 `website/downloads/`에 생성됩니다. 로컬 빌드는 저장소의 `CHANGELOG.md`에 배포 완료 기록을 쓰지 않습니다.
+같은 빌드 환경에서 환경변수 `CHZZK_CLIENT_ID`와 `CHZZK_CLIENT_SECRET`을 설정한 뒤 `build_release.bat`을 실행합니다. 결과는 `website/downloads/`에 생성됩니다. 로컬 빌드는 저장소의 `CHANGELOG.md`에 배포 완료 기록을 쓰지 않습니다.
 
 진단 로그 업로드는 보호된 Python/C 소스를 포함하지 않습니다. 컴파일로 원본 확인을 어렵게 만들 수 있지만 배포 앱에 포함된 Secret의 추출을 완전히 막을 수는 없습니다.

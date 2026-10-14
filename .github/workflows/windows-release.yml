@@ -73,9 +73,11 @@ jobs:
         if: steps.resolve.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          CHZZK_CLIENT_ID: ${{ secrets.CHZZK_CLIENT_ID }}
           CHZZK_CLIENT_SECRET: ${{ secrets.CHZZK_CLIENT_SECRET }}
           RELEASE_VERSION: ${{ steps.resolve.outputs.version }}
         run: |
+          if ([string]::IsNullOrWhiteSpace($env:CHZZK_CLIENT_ID)) { throw 'Set the CHZZK_CLIENT_ID repository Actions secret before publishing.' }
           if ([string]::IsNullOrWhiteSpace($env:CHZZK_CLIENT_SECRET)) { throw 'Set the CHZZK_CLIENT_SECRET repository Actions secret before publishing.' }
           $releases = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0) { throw 'Could not inspect existing releases.' }
@@ -94,7 +96,7 @@ jobs:
       - name: Compile protected Python app
         shell: cmd
         env:
-          CHZZK_CLIENT_ID: ${{ vars.CHZZK_CLIENT_ID }}
+          CHZZK_CLIENT_ID: ${{ secrets.CHZZK_CLIENT_ID }}
           CHZZK_CLIENT_SECRET: ${{ secrets.CHZZK_CLIENT_SECRET }}
         run: build.bat
       - name: Compile protected updater

@@ -64,16 +64,17 @@ class ReleaseHistoryTests(unittest.TestCase):
 
 
 class CredentialStagingTests(unittest.TestCase):
-    def test_secret_is_injected_into_staging_without_changing_public_source(self):
-        source = "import os\nAPP_CLIENT_ID = 'public-id'\nAPP_CLIENT_SECRET = os.environ.get('CHZZK_CLIENT_SECRET', '')\n"
+    def test_credentials_are_injected_into_staging_without_changing_public_source(self):
+        source = "import os\nAPP_CLIENT_ID = os.environ.get('CHZZK_CLIENT_ID', '')\nAPP_CLIENT_SECRET = os.environ.get('CHZZK_CLIENT_SECRET', '')\n"
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)/'chzzk_open.py';path.write_text(source)
             value = "test-secret-with-'quote'"
-            staged = staged_source('chzzk_open', path, {'CHZZK_CLIENT_SECRET': value})
+            staged = staged_source('chzzk_open', path, {'CHZZK_CLIENT_ID': 'test-client-id', 'CHZZK_CLIENT_SECRET': value})
             self.assertEqual(path.read_text(), source)
             tree = ast.parse(staged)
-            assignment = next(n for n in tree.body if isinstance(n, ast.Assign) and n.targets[0].id == 'APP_CLIENT_SECRET')
-            self.assertEqual(ast.literal_eval(assignment.value), value)
+            assignments = {n.targets[0].id: ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign)}
+            self.assertEqual(assignments['APP_CLIENT_ID'], 'test-client-id')
+            self.assertEqual(assignments['APP_CLIENT_SECRET'], value)
             self.assertEqual(staged_source('chzzk_open', path, {}), source)
 
 
