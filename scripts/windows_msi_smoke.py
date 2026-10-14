@@ -4,20 +4,35 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
-import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from updater_app import _install_msi
 from version import APP_VERSION
 
-BASE_VERSION = '4.11.4'
-BASE_URL = ('https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/download/'
-            'v4.11.4/ChzzkAutoCategory-4.11.4.msi')
-BASE_HASH = '58f54bd27503df9e686e92f5adda5fd2f600b498c2a335af3819016ca9413351'
+REPOSITORY = 'chzzk-dev/CHZZK-Auto-Category'
+
+
+def baseline_release():
+    result = subprocess.run(['gh', 'api', f'repos/{REPOSITORY}/releases?per_page=100'],
+                            capture_output=True, text=True, encoding='utf-8', check=True)
+    candidates = []
+    current = tuple(map(int, APP_VERSION.split('.')))
+    for release in json.loads(result.stdout):
+        version = release['tag_name'].removeprefix('v')
+        if release['draft'] or release['prerelease'] or not re.fullmatch(r'\d+\.\d+\.\d+', version):
+            continue
+        key = tuple(map(int, version.split('.')))
+        asset = next((a for a in release['assets'] if a['name'] == f'ChzzkAutoCategory-{version}.msi'), None)
+        if key < current and asset and str(asset.get('digest', '')).startswith('sha256:'):
+            candidates.append((key, version, release['tag_name'], asset['digest'].split(':', 1)[1]))
+    if not candidates:
+        raise RuntimeError('No previous stable MSI with a GitHub checksum is available for upgrade verification.')
+    return max(candidates)[1:]
 
 
 def digest(path):
@@ -37,12 +52,12 @@ def main():
         raise RuntimeError('Run this integration check only on the disposable Windows CI runner.')
     if not ctypes.windll.shell32.IsUserAnAdmin():
         raise RuntimeError('The Windows MSI verification runner must be elevated.')
-    if tuple(map(int, APP_VERSION.split('.'))) <= tuple(map(int, BASE_VERSION.split('.'))):
-        raise RuntimeError('Upgrade verification requires a version newer than the baseline.')
+    base_version, base_tag, base_hash = baseline_release()
+    print('Upgrade verification baseline:', base_version, flush=True)
     logs = ROOT / 'build/msi-smoke'
     logs.mkdir(parents=True, exist_ok=True)
     current = ROOT / 'dist-installer' / f'ChzzkAutoCategory-{APP_VERSION}.msi'
-    expected_exe = ROOT / 'dist/ChzzkAutoCategory/ChzzkAutoCategory.exe'
+    payload = ROOT / 'dist/ChzzkAutoCategory'
     msiexec = str(Path(os.environ['SystemRoot']) / 'System32/msiexec.exe')
     target = Path(os.environ['ProgramFiles']) / 'CHZZK MSI test & 한글'
     if target.exists():
@@ -51,13 +66,11 @@ def main():
     with tempfile.TemporaryDirectory(prefix='chzzk-msi-') as temporary:
         directory = Path(temporary) / '다운로드 & test'
         directory.mkdir()
-        baseline = directory / f'ChzzkAutoCategory-{BASE_VERSION}.msi'
-        request = urllib.request.Request(BASE_URL, headers={'User-Agent': 'CHZZK-MSI-CI'})
-        with urllib.request.urlopen(request, timeout=60) as response, baseline.open('wb') as stream:
-            while chunk := response.read(256 * 1024):
-                stream.write(chunk)
-        if digest(baseline) != BASE_HASH:
-            raise RuntimeError('The pinned baseline MSI checksum does not match.')
+        baseline = directory / f'ChzzkAutoCategory-{base_version}.msi'
+        subprocess.run(['gh', 'release', 'download', base_tag, '--repo', REPOSITORY,
+                        '--pattern', baseline.name, '--dir', str(directory)], check=True, timeout=120)
+        if digest(baseline) != base_hash:
+            raise RuntimeError('The baseline MSI does not match its GitHub checksum.')
         profile = Path(temporary) / 'profile'
         config = profile / 'ChzzkAutoCategory/config.json'
         config.parent.mkdir(parents=True)
@@ -79,7 +92,7 @@ def main():
 
             _install_msi(baseline, target, logs / 'baseline-install.log')
             installed_package = baseline
-            if installed_version() != BASE_VERSION or not (target / 'ChzzkAutoCategory.exe').is_file():
+            if installed_version() != base_version or not (target / 'ChzzkAutoCategory.exe').is_file():
                 raise RuntimeError('The baseline was not installed at the specified Unicode/space path.')
             if config.read_bytes() != saved:
                 raise RuntimeError('Installing the baseline changed user settings.')
@@ -89,8 +102,9 @@ def main():
             installed_package = current
             if installed_version() != APP_VERSION:
                 raise RuntimeError('Windows Installer did not register the upgraded version.')
-            if digest(target / 'ChzzkAutoCategory.exe') != digest(expected_exe):
-                raise RuntimeError('The installed executable does not match the new build.')
+            for executable in ('ChzzkAutoCategory.exe', 'ChzzkAutoUpdater.exe'):
+                if digest(target / executable) != digest(payload / executable):
+                    raise RuntimeError('The installed executable does not match the new build: ' + executable)
             if config.read_bytes() != saved:
                 raise RuntimeError('Upgrading changed user settings.')
             print('Actual MSI upgrade passed; new executable and existing settings verified.', flush=True)

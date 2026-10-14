@@ -124,6 +124,8 @@ jobs:
           dotnet run --project installer/modern-ui/tests/StateTests.csproj --configuration Release
           if ($LASTEXITCODE -ne 0) { throw 'Installer state tests failed.' }
       - name: Install and upgrade the MSI using the actual updater command
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           .venv/Scripts/python.exe scripts/windows_msi_smoke.py
           if ($LASTEXITCODE -ne 0) { throw 'Actual MSI installation/upgrade verification failed.' }
