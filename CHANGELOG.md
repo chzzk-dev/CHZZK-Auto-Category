@@ -5,11 +5,29 @@
 
 ## 미배포
 
+- 아직 기록할 변경 사항이 없습니다.
+
+## [4.12.1](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.1) — 2026-10-14 (KST)
+
+### 변경 사항
+
 - 쿠키앤크림 스타일의 크림 배경·다크그레이 카드·두꺼운 흰 테두리로 데스크톱 UI를 전면 개편합니다.
 - 대시보드를 큰 게임 패널, 오른쪽 연결·자동화 패널, 하단 감지·카테고리·활동 패널로 재배치합니다.
 - 메뉴·게임 목록·설정·연결·로그·팝업과 지원 아이콘의 스타일 및 대비를 통일합니다.
 - 기존 감지·자동 변경·확장 연결·사용자 설정은 유지합니다.
 - 4.12.1은 정식 최신 릴리스로 배포하며 기존 안정 버전의 업데이트 확인 대상에 포함됩니다.
+
+### 커밋
+
+- Publish cookie-and-cream desktop redesign as stable 4.12.1 ([d2fdb4b](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/d2fdb4bfca8abc3d784d17f2a777fdd127e351f6))
+
+[전체 변경 비교](https://github.com/chzzk-dev/CHZZK-Auto-Category/compare/v4.12.0...v4.12.1)
+
+### 설치 파일
+
+- `ChzzkAutoCategory-4.12.1.msi`
+- `SHA256SUMS.txt`에서 설치 파일의 SHA-256을 확인할 수 있습니다.
+- 기존 MSI 설치본은 새 MSI로 업그레이드하며 사용자 설정을 유지합니다.
 
 ## [4.12.0](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.0) — 2026-10-14 (KST)
 
