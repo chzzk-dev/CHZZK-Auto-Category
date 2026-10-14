@@ -5,9 +5,27 @@
 
 ## 미배포
 
+- 아직 기록할 변경 사항이 없습니다.
+
+## [4.12.2](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.2) — 2026-10-14 (KST)
+
+### 변경 사항
+
 - 롤/TFT 모드 확인 대기를 중복 항목으로 삭제한 뒤 재등록하던 문제를 수정합니다.
 - 같은 게임을 감지할 때 정리 로그와 확인 알림이 반복되지 않도록 합니다.
 - 게임 종료 또는 수동 연결 시 대기 항목을 정상 정리하며, 근거 없는 롤/TFT 자동 선택은 방지합니다.
+
+### 커밋
+
+- Fix repeated cleanup and re-registration of LoL/TFT mode prompts in 4.12.2 ([a154a34](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/a154a34baa77668708c99593960e7be7d25515ac))
+
+[전체 변경 비교](https://github.com/chzzk-dev/CHZZK-Auto-Category/compare/v4.12.1...v4.12.2)
+
+### 설치 파일
+
+- `ChzzkAutoCategory-4.12.2.msi`
+- `SHA256SUMS.txt`에서 설치 파일의 SHA-256을 확인할 수 있습니다.
+- 기존 MSI 설치본은 새 MSI로 업그레이드하며 사용자 설정을 유지합니다.
 
 ## [4.12.1](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.1) — 2026-10-14 (KST)
 
