@@ -5,6 +5,12 @@
 
 ## 미배포
 
+- 아직 기록할 변경 사항이 없습니다.
+
+## [4.12.0](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.0) — 2026-10-14 (KST)
+
+### 변경 사항
+
 - 밝은 설치 UI와 공통 테마/아이콘을 사용하는 대시보드·게임 목록·자동화·연결·설정·로그 6개 페이지로 개편합니다.
 - 게임별 검색·검증 상태와 적용 대기를 분리하며 수동 규칙, 시리즈/버전 구분, 종료된 게임의 지연 결과 차단을 강화합니다.
 - Discord ID와 사용자 별칭을 유지하고 검증 캐시를 재사용합니다. LoL/TFT는 실행 파일만으로 추측하지 않습니다.
@@ -13,6 +19,18 @@
 - 설정 마이그레이션 원본 백업, 순환 로그와 민감 정보 마스킹, 단일 업데이터 잠금 및 실패 후 기존 앱 재실행 경로를 추가합니다.
 - Windows CI에 Qt DPI 렌더링과 실제 보호 EXE의 오프라인 아이콘 검사를 추가합니다. 기존 MSI 설치·업그레이드·제거 검증은 유지합니다.
 - 4.12.0은 사전 릴리스 후보입니다. GitHub 반영과 게시에는 사용자 승인이 필요하며 Chrome Web Store 게시와는 별개입니다.
+
+### 커밋
+
+- Redesign desktop UI and strengthen verified category automation for 4.12.0 ([49e59fc](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/49e59fcc1ba7497736feb713b602c3702feefd08))
+
+[전체 변경 비교](https://github.com/chzzk-dev/CHZZK-Auto-Category/compare/v4.11.5...v4.12.0)
+
+### 설치 파일
+
+- `ChzzkAutoCategory-4.12.0.msi`
+- `SHA256SUMS.txt`에서 설치 파일의 SHA-256을 확인할 수 있습니다.
+- 기존 MSI 설치본은 새 MSI로 업그레이드하며 사용자 설정을 유지합니다.
 
 ## [4.11.5](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.11.5) — 2026-10-14 (KST)
 
