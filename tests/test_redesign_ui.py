@@ -42,7 +42,7 @@ class ModernUiTests(unittest.TestCase):
         self.assertEqual([id(w.pages.widget(i)) for i in range(6)], identities)
         self.assertEqual(w.minimumWidth(), 1200)
         self.assertEqual(w.minimumHeight(), 820)
-        self.assertEqual(TOKENS['background'], '#F7FAFB')
+        self.assertEqual(TOKENS['background'], '#F3F1EB')
 
     def test_all_offline_icons_render(self):
         self.assertTrue(validate_icons())

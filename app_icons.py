@@ -16,11 +16,11 @@ ICONS = {
 
 
 @lru_cache(maxsize=128)
-def app_icon(name, color='#17313C'):
+def app_icon(name, color='#252525'):
     return qta.icon('fa6s.' + ICONS[name], color=color)
 
 
-def set_button_icon(button, name, color='#17313C'):
+def set_button_icon(button, name, color='#252525'):
     button.setIcon(app_icon(name, color))
     button.setIconSize(QSize(18, 18))
     button.setAccessibleName(button.text() or button.toolTip() or name)

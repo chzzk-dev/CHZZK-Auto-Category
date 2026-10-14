@@ -40,8 +40,8 @@ QLabel#logo {{ background:{TOKENS['accent']}; color:{TOKENS['text']}; border-rad
 QLabel#title {{ font-size:17px; font-weight:700; }}
 QLabel#status {{ font-size:22px; font-weight:800; }}
 QLabel#detail, QLabel#sub {{ color:{TOKENS['muted']}; }}
-QLabel#version {{ color:{TOKENS['success']}; background:#E7F8F1; border-radius:10px; padding:6px 10px; }}
-QProgressBar {{ min-height:15px; max-height:15px; background:#E3EBEE; border:none; border-radius:7px; color:transparent; }}
+QLabel#version {{ color:{TOKENS['success']}; background:#323232; border-radius:10px; padding:6px 10px; }}
+QProgressBar {{ min-height:15px; max-height:15px; background:#D4D0C5; border:none; border-radius:7px; color:transparent; }}
 QProgressBar::chunk {{ background:{TOKENS['accent']}; border-radius:7px; }}
 """
 

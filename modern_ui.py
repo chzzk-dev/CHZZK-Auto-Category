@@ -85,7 +85,7 @@ def action(text, callback, icon='info', primary=False):
     result = QPushButton(text)
     if primary:
         result.setObjectName('primary')
-    set_button_icon(result, icon)
+    set_button_icon(result, icon, '#FFFFFF' if primary else '#252525')
     result.clicked.connect(callback)
     return result
 
@@ -95,7 +95,7 @@ def card(title):
     widget.setObjectName('panelCard')
     layout = QVBoxLayout(widget)
     layout.setContentsMargins(20, 18, 20, 18)
-    layout.setSpacing(10)
+    layout.setSpacing(14)
     layout.addWidget(label(title, 'sectionTitle'))
     return widget, layout
 
@@ -136,7 +136,7 @@ class GameTableModel(QAbstractTableModel):
                       row['mode'], row['state'], '자세히')
             return values[index.column()]
         if role == Qt.ItemDataRole.DecorationRole and index.column() == 5:
-            return app_icon('details')
+            return app_icon('details', '#C7C4BC')
 
     def replace(self, rows):
         if rows == self.rows:
@@ -178,7 +178,7 @@ class ModernWindowMixin:
         self.nav.clear()
         self.nav.setIconSize(QSize(19, 19))
         for title, _, name in PAGES:
-            self.nav.addItem(QListWidgetItem(app_icon(name, '#BED8D6'), title))
+            self.nav.addItem(QListWidgetItem(app_icon(name, '#D4D0C6'), title))
         self.nav.blockSignals(False)
         self.ui_ready = True
         self.nav.setCurrentRow(0)
@@ -209,7 +209,7 @@ class ModernWindowMixin:
         self.page_title.setText(PAGES[index][0])
         self.page_sub.setText(PAGES[index][1])
         for i, (_, _, name) in enumerate(PAGES):
-            self.nav.item(i).setIcon(app_icon(name, TOKENS['accent'] if i == index else '#BED8D6'))
+            self.nav.item(i).setIcon(app_icon(name, '#252525' if i == index else '#D4D0C6'))
         if index in (0, 3):
             self.refresh_connection_page()
         if index == 4:
@@ -225,38 +225,36 @@ class ModernWindowMixin:
 
     def build_dashboard(self):
         page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 8, 0, 0)
-        layout.setSpacing(16)
-        grid = QGridLayout()
+        layout = QGridLayout(page)
+        layout.setContentsMargins(0, 4, 0, 0)
+        layout.setSpacing(6)
         self.dashboard_values = {}
-        for i, (key, title) in enumerate((('automation', '자동화 상태'), ('game', '현재 감지된 게임'),
-                                          ('category', '현재 치지직 카테고리'), ('extension', '브라우저 확장프로그램'))):
-            c, dot, v, meta = self._make_status_card(title, '확인 전', '')
-            self.dashboard_values[key] = (v, meta, dot)
-            grid.addWidget(c, i // 2, i % 2)
-        grid.setColumnStretch(0, 1)
-        grid.setColumnStretch(1, 1)
-        layout.addLayout(grid)
-        c, box = card('현재 실행 중인 게임')
-        self.dashboard_game = label('현재 실행 중인 게임이 없습니다.', 'statusCardValue')
+        hero, box = card('현재 실행 중인 게임')
+        self.dashboard_game = label('현재 실행 중인 게임이 없습니다.', 'heroGame')
         self.dashboard_game_meta = label('게임을 실행하면 자동으로 감지하여 방송 카테고리를 검색합니다.')
+        box.addStretch(1)
         box.addWidget(self.dashboard_game)
         box.addWidget(self.dashboard_game_meta)
-        row = QHBoxLayout()
-        row.addWidget(action('게임 목록 관리', lambda: self.nav.setCurrentRow(1), 'games'))
-        row.addStretch()
-        box.addLayout(row)
-        layout.addWidget(c)
-        c, box = card('최근 활동')
+        box.addStretch(1)
+        box.addWidget(action('게임 목록 관리', lambda: self.nav.setCurrentRow(1), 'games'))
+        layout.addWidget(hero, 0, 0, 2, 2)
+        positions = {'extension': (0, 2), 'automation': (1, 2), 'game': (2, 0), 'category': (2, 1)}
+        for key, title in (('automation', '자동화 상태'), ('game', '감지 및 매칭'),
+                           ('category', '치지직 카테고리'), ('extension', '브라우저 확장프로그램')):
+            c, dot, value, meta = self._make_status_card(title, '확인 전', '')
+            self.dashboard_values[key] = (value, meta, dot)
+            layout.addWidget(c, *positions[key])
+        activity, box = card('최근 활동')
         self.dashboard_activity = label('아직 기록된 활동이 없습니다.')
         box.addWidget(self.dashboard_activity)
-        row = QHBoxLayout()
-        row.addWidget(action('전체 로그 보기', lambda: self.nav.setCurrentRow(5), 'logs'))
-        row.addStretch()
-        box.addLayout(row)
-        layout.addWidget(c)
-        layout.addStretch()
+        box.addStretch(1)
+        box.addWidget(action('전체 로그 보기', lambda: self.nav.setCurrentRow(5), 'logs'))
+        layout.addWidget(activity, 2, 2)
+        for i in range(3):
+            layout.setColumnStretch(i, 1)
+        layout.setRowStretch(0, 1)
+        layout.setRowStretch(1, 1)
+        layout.setRowStretch(2, 2)
         return scroll_page(page)
 
     def representative_game(self):
@@ -275,7 +273,7 @@ class ModernWindowMixin:
         self.dashboard_values['automation'][0].setText(state)
         self.dashboard_values['automation'][1].setText('안전한 자동 선택 · 항상 적용')
         self.sidebar_auto_state.setText(state)
-        set_button_icon(self.toggle_button, 'pause' if self.enabled else 'start')
+        set_button_icon(self.toggle_button, 'pause' if self.enabled else 'start', '#FFFFFF')
         g = self.representative_game()
         self.dashboard_values['game'][0].setText(g.get('game_name') or g.get('process') if g else '감지된 게임 없음')
         self.dashboard_values['game'][1].setText(g.get('stage', '감지됨') if g else '게임 실행을 기다립니다')

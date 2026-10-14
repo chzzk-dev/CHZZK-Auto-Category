@@ -18,11 +18,11 @@ from app_icons import app_icon
 ACCENT = TOKENS['accent']
 ACCENT_HOVER = TOKENS['hover']
 SURFACE = TOKENS['background']
-CARD = TOKENS['card']
+CARD = '#F5F3ED'
 BORDER = TOKENS['border']
 TEXT = TOKENS['text']
 MUTED = TOKENS['muted']
-WARNING = '#FFF4DD'
+WARNING = '#E7E3DA'
 DANGER = '#B94A59'
 
 _DIALOG_STYLE = f'''
@@ -32,24 +32,24 @@ QFrame#dialogShell {{
     border: 1px solid {BORDER};
     border-radius: 22px;
 }}
-QFrame#dialogIconInfo {{ background: #E4F8F0; border: 1px solid #C4E8DC; border-radius: 20px; }}
-QFrame#dialogIconWarning {{ background: #FFF4DD; border: 1px solid #EAD8B4; border-radius: 20px; }}
-QFrame#dialogIconError {{ background: #FCECF0; border: 1px solid #EBCBD1; border-radius: 20px; }}
-QFrame#dialogIconQuestion {{ background: #E4F8F0; border: 1px solid #C4E8DC; border-radius: 20px; }}
+QFrame#dialogIconInfo {{ background: #E7E3DA; border: 1px solid #D4D0C5; border-radius: 20px; }}
+QFrame#dialogIconWarning {{ background: #E7E3DA; border: 1px solid #D4D0C5; border-radius: 20px; }}
+QFrame#dialogIconError {{ background: #E7E3DA; border: 1px solid #D4D0C5; border-radius: 20px; }}
+QFrame#dialogIconQuestion {{ background: #E7E3DA; border: 1px solid #D4D0C5; border-radius: 20px; }}
 QLabel#dialogGlyph {{ color: {TEXT}; font-size: 18px; font-weight: 900; }}
 QLabel#dialogTitle {{ color: {TEXT}; font-size: 19px; font-weight: 850; }}
-QLabel#dialogMessage {{ color: #6D8490; font-size: 13px; line-height: 1.5; }}
+QLabel#dialogMessage {{ color: #77756F; font-size: 13px; line-height: 1.5; }}
 QPushButton {{
     min-height: 42px;
     border-radius: 13px;
     padding: 0 18px;
     background: #FFFFFF;
-    border: 1px solid #E3EBEE;
+    border: 1px solid #D4D0C5;
     color: {TEXT};
     font-weight: 700;
 }}
-QPushButton:hover {{ background: #EDF9F4; border-color: #A8D9CF; }}
-QPushButton#dialogPrimary {{ background: {ACCENT}; color: #071911; border: none; }}
+QPushButton:hover {{ background: #DDD8CE; border-color: #BDB7AB; }}
+QPushButton#dialogPrimary {{ background: {ACCENT}; color: #252525; border: none; }}
 QPushButton#dialogPrimary:hover {{ background: {ACCENT_HOVER}; }}
 QPushButton#dialogDanger {{ background: {DANGER}; color: #1f0710; border: none; }}
 QPushButton#dialogDanger:hover {{ background: #ff8495; }}
@@ -58,7 +58,7 @@ QPushButton#dialogClose {{
     border-radius: 9px; padding: 0; background: transparent; border: 1px solid transparent;
     color: #8f9aac;
 }}
-QPushButton#dialogClose:hover {{ background: #EDF9F4; border-color: #E3EBEE; color: #17313C; }}
+QPushButton#dialogClose:hover {{ background: #DDD8CE; border-color: #D4D0C5; color: #252525; }}
 '''
 
 

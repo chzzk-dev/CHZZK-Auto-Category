@@ -81,7 +81,7 @@ def button(text, callback, primary=False):
     result = QPushButton(text)
     if primary:
         result.setObjectName('primary')
-    set_button_icon(result, next((name for key, name in (('삭제', 'delete'), ('수정', 'edit'), ('검색', 'search'), ('확인', 'refresh'), ('설정', 'settings'), ('저장', 'success'), ('연결', 'connections'), ('트레이', 'tray'), ('로그', 'logs'), ('위로', 'up'), ('아래로', 'down'), ('업데이트', 'download')) if key in text), 'info'))
+    set_button_icon(result, next((name for key, name in (('삭제', 'delete'), ('수정', 'edit'), ('검색', 'search'), ('확인', 'refresh'), ('설정', 'settings'), ('저장', 'success'), ('연결', 'connections'), ('트레이', 'tray'), ('로그', 'logs'), ('위로', 'up'), ('아래로', 'down'), ('업데이트', 'download')) if key in text), 'info'), '#FFFFFF' if primary else '#252525')
     result.clicked.connect(callback)
     return result
 
@@ -299,44 +299,44 @@ class TrayPopup(QWidget):
         self.setStyleSheet(r'''
             QWidget#trayPopupWindow { background: transparent; }
             QFrame#trayPanel {
-                background: #F7FAFB;
-                border: 1px solid #E3EBEE;
+                background: #F3F1EB;
+                border: 1px solid #D7D3C9;
                 border-radius: 20px;
             }
             QLabel#trayAppIcon { background: transparent; border: none; }
-            QLabel#trayTitle { color: #17313C; font-size: 14px; font-weight: 800; }
-            QLabel#trayCaption { color: #6D8490; font-size: 11px; }
+            QLabel#trayTitle { color: #252525; font-size: 14px; font-weight: 800; }
+            QLabel#trayCaption { color: #77756F; font-size: 11px; }
             QFrame#trayStatusCard, QFrame#trayInfoCard {
                 background: #FFFFFF;
-                border: 1px solid #E3EBEE;
+                border: 1px solid #D7D3C9;
                 border-radius: 14px;
             }
-            QLabel#trayStatusTitle { color: #17313C; font-size: 13px; font-weight: 750; }
-            QLabel#trayInfoText { color: #6D8490; font-size: 11px; }
-            QLabel#traySection { color: #6D8490; font-size: 10px; font-weight: 700; padding: 2px 2px 0 2px; }
-            QFrame#trayDivider { background: #E3EBEE; border: none; }
+            QLabel#trayStatusTitle { color: #252525; font-size: 13px; font-weight: 750; }
+            QLabel#trayInfoText { color: #77756F; font-size: 11px; }
+            QLabel#traySection { color: #77756F; font-size: 10px; font-weight: 700; padding: 2px 2px 0 2px; }
+            QFrame#trayDivider { background: #D7D3C9; border: none; }
             QPushButton#trayButton {
                 text-align: left;
                 background: #FFFFFF;
-                color: #17313C;
-                border: 1px solid #E3EBEE;
+                color: #252525;
+                border: 1px solid #D7D3C9;
                 border-radius: 13px;
                 min-height: 22px;
                 padding: 10px 13px;
                 font-weight: 650;
             }
-            QPushButton#trayButton:hover { background: #EDF9F4; border-color: #A8D9CF; }
+            QPushButton#trayButton:hover { background: #E3DFD5; border-color: #BDB7AB; }
             QPushButton#trayPrimary {
                 text-align: left;
-                background: #35DEB0;
-                color: #071911;
-                border: 1px solid #35DEB0;
+                background: #252525;
+                color: #FFFFFF;
+                border: 1px solid #252525;
                 border-radius: 13px;
                 min-height: 22px;
                 padding: 10px 13px;
                 font-weight: 800;
             }
-            QPushButton#trayPrimary:hover { background: #25C99C; border-color: #25C99C; }
+            QPushButton#trayPrimary:hover { background: #484848; border-color: #484848; }
             QPushButton#trayDanger {
                 text-align: left;
                 background: #FFFFFF;
@@ -352,7 +352,7 @@ class TrayPopup(QWidget):
 
     def _button(self, text, primary=False, danger=False):
         result = QPushButton(text)
-        set_button_icon(result, 'close' if danger else 'start' if primary else 'info')
+        set_button_icon(result, 'close' if danger else 'start' if primary else 'info', '#FFFFFF' if primary else '#252525')
         result.setCursor(Qt.CursorShape.PointingHandCursor)
         result.setObjectName('trayPrimary' if primary else ('trayDanger' if danger else 'trayButton'))
         return result
@@ -777,13 +777,13 @@ class ExistingWindow(QMainWindow):
 
         body = QWidget()
         body_layout = QHBoxLayout(body)
-        body_layout.setContentsMargins(0, 0, 0, 0)
-        body_layout.setSpacing(0)
+        body_layout.setContentsMargins(8, 0, 8, 8)
+        body_layout.setSpacing(6)
         shell_layout.addWidget(body, 1)
 
         sidebar = QFrame()
         sidebar.setObjectName('sidebar')
-        sidebar.setFixedWidth(226)
+        sidebar.setFixedWidth(210)
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(14, 16, 14, 14)
         sidebar_layout.setSpacing(8)
@@ -854,7 +854,7 @@ class ExistingWindow(QMainWindow):
         content = QFrame()
         content.setObjectName('contentCard')
         content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(26, 22, 26, 20)
+        content_layout.setContentsMargins(14, 18, 10, 10)
         content_layout.setSpacing(15)
 
         header = QHBoxLayout()
@@ -999,7 +999,7 @@ class ExistingWindow(QMainWindow):
         title_label = QLabel(title)
         title_label.setObjectName('statusCardTitle')
         dot = QLabel()
-        dot.setPixmap(app_icon('info', '#6D8490').pixmap(16, 16))
+        dot.setPixmap(app_icon('info', '#77756F').pixmap(16, 16))
         dot.setObjectName('statusDotOff')
         top.addWidget(title_label)
         top.addStretch(1)
