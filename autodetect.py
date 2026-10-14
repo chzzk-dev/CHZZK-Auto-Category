@@ -629,7 +629,7 @@ def cleanup_auto_mappings(auto_rules, auto_pending, manual_rules=None):
             removed_pending += 1
             continue
         process_key = process.casefold()
-        if process_key in covered_keys:
+        if process_key in manual_keys or (process_key in covered_keys and reason != 'multi-game'):
             removed_pending += 1
             continue
         key = (process_key, reason)

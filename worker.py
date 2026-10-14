@@ -371,6 +371,19 @@ class Worker(QThread):
                 continue
             normal_pending.append(item)
 
+        # A saved automatic category does not resolve a shared LoL/TFT executable.
+        # Keep the current session's mode prompt until a manual/session rule resolves it.
+        if self.config.get('league_mode', 'legacy') == 'ask':
+            confirmed = {category_choice_process_key(p) for r in
+                         [*[Rule(**raw) for raw in self.config.get('rules', [])], *self.session_rules.values()]
+                         for p in r.processes}
+            for item in self.config.get('auto_pending', []):
+                if (isinstance(item, dict) and item.get('reason') == 'multi-game'
+                        and str(item.get('process', '')).casefold() in ('leagueclient.exe', 'league of legends.exe')
+                        and category_choice_process_key(item['process']) not in confirmed
+                        and active.intersection(('leagueclient.exe', 'league of legends.exe'))):
+                    normal_pending.append(item)
+
         # Deduplicate the current scan only. A process that stopped running, was resolved,
         # or disappeared from Discord detection is removed from the pending count here.
         pending = []
@@ -383,7 +396,7 @@ class Worker(QThread):
         for item in normal_pending:
             process = str(item.get('process') or '').strip()
             reason = str(item.get('reason') or '').strip()
-            if not process or process.casefold() in resolved_processes:
+            if not process or (process.casefold() in resolved_processes and reason != 'multi-game'):
                 continue
             key = (process.casefold(), reason)
             if key in seen:

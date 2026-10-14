@@ -219,6 +219,27 @@ class WorkerSafetyTests(unittest.TestCase):
         self.worker.api.apply.assert_called_once()
         self.assertEqual(self.worker.api.apply.call_args.args[0].category_id, 'Teamfight_Tactics')
 
+    def test_lol_mode_pending_is_not_deleted_and_readded_each_scan(self):
+        self.worker.mapper.entries = with_game_client_compatibility({})
+        self.worker.api.search.return_value = [category('League_of_Legends', '리그 오브 레전드')]
+        with patch.object(self.worker.mapper, 'ensure_index', return_value={}), patch('worker.snapshot_process_names', return_value=['LeagueClient.exe']):
+            self.worker.scan()
+            pending = list(self.worker.config['auto_pending'])
+            self.assertTrue(any(p.get('reason') == 'multi-game' for p in pending))
+            self.events.clear()
+            for _ in range(4):
+                self.assertFalse(self.worker.sanitize_auto_state())
+                self.worker.last_auto_sync = 0
+                self.worker.scan()
+                self.assertEqual(self.worker.config['auto_pending'], pending)
+        self.assertFalse(any(e['kind'] == 'log' and '정리했습니다' in e.get('text', '') for e in self.events))
+        self.assertFalse(any(e['kind'] == 'auto_pending' for e in self.events))
+        self.worker.api.apply.assert_not_called()
+        with patch.object(self.worker.mapper, 'ensure_index', return_value={}), patch('worker.snapshot_process_names', return_value=[]):
+            self.worker.last_auto_sync = 0
+            self.worker.scan()
+        self.assertEqual(self.worker.config['auto_pending'], [])
+
     def test_live_only_holds_an_offline_broadcast(self):
         self.worker.config['only_when_live'] = True
         self.worker.api.is_live.return_value = False
