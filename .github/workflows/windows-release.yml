@@ -60,15 +60,29 @@ jobs:
           REQUESTED_VERSION: ${{ inputs.version }}
           RELEASE_REF: ${{ github.ref_name }}
           IS_TAG: ${{ github.ref_type == 'tag' }}
-          SHOULD_PUBLISH: ${{ (github.event_name == 'push' && github.ref_type == 'tag') || (github.event_name == 'workflow_dispatch' && inputs.publish_release) }}
+          SHOULD_PUBLISH: ${{ (github.event_name == 'push' && (github.ref_type == 'tag' || github.ref == 'refs/heads/main')) || (github.event_name == 'workflow_dispatch' && inputs.publish_release) }}
+          AUTO_PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           $argsList = @('scripts/release_notes.py', 'resolve')
           if (-not [string]::IsNullOrWhiteSpace($env:REQUESTED_VERSION)) { $argsList += @('--requested', $env:REQUESTED_VERSION) }
           if ($env:IS_TAG -eq 'true') { $argsList += @('--tag', $env:RELEASE_REF) }
           $result = & python @argsList
           if ($LASTEXITCODE -ne 0) { throw 'Version/tag validation failed.' }
+          $publish = $env:SHOULD_PUBLISH -eq 'true'
+          if ($publish -and $env:AUTO_PUBLISH -eq 'true') {
+            $sourceVersion = ($result | Where-Object { $_ -like 'version=*' }) -replace '^version=', ''
+            $releases = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) { throw 'Could not inspect existing releases for automatic publication.' }
+            foreach ($release in $releases) {
+              if ($release.draft -or $release.prerelease) { continue }
+              $version = $release.tag_name -replace '^v', ''
+              if ($version -match '^\d+\.\d+\.\d+$' -and [version]$version -ge [version]$sourceVersion) { $publish = $false }
+            }
+            if (-not $publish) { Write-Host 'This version is already published; building without replacing release assets.' }
+          }
           $result | Add-Content $env:GITHUB_OUTPUT
-          "publish=$env:SHOULD_PUBLISH" | Add-Content $env:GITHUB_OUTPUT
+          "publish=$($publish.ToString().ToLowerInvariant())" | Add-Content $env:GITHUB_OUTPUT
       - name: Validate publication prerequisites
         if: steps.resolve.outputs.publish == 'true'
         env:
