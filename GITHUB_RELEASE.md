@@ -10,6 +10,8 @@ Secret이 없는 일반 빌드도 테스트 및 MSI 생성은 가능합니다. �
 
 ## 새 버전 게시
 
+현재 `4.11.5`는 업데이터 복구를 위한 수동 설치용 사전 릴리스입니다. `version.py`의 `RELEASE_PRERELEASE = True`를 사용하며 Latest로 지정하지 않습니다. 기존 앱이 조회하는 `/releases/latest`에 포함되지 않으므로 자동 업데이트 오류를 다시 유발하지 않습니다. 사용자는 MSI를 한 번 직접 설치해 업데이터를 교체합니다. 이후 정식 업데이트를 배포할 때는 버전을 올리고 `RELEASE_PRERELEASE = False`로 설정하세요.
+
 1. `version.py`의 `APP_VERSION`을 기존 배포보다 높은 세 자리 버전으로 수정합니다.
 2. `CHANGELOG.md`의 `## 미배포`에 사용자가 이해할 변경 사항을 적고 main에 업로드합니다.
 3. main 업로드로 시작한 Windows 빌드와 검증이 성공하면 새 버전을 GitHub Release에 자동 게시합니다. 수동으로 시작하려면 Actions → **Windows MSI Build and Release** → **Run workflow**에서 main과 `publish_release = true`를 선택합니다. version은 비워 두거나 소스와 같은 버전을 입력합니다. 또는 `v4.11.5`와 같은 태그를 올립니다. 기존 형식 `4.11.5`도 지원합니다.

@@ -36,6 +36,19 @@ def source_version(root=ROOT):
     raise ValueError('APP_VERSION is missing.')
 
 
+def source_prerelease(root=ROOT):
+    path = root / 'version.py'
+    if not path.exists():
+        return False
+    for node in ast.parse(path.read_text(encoding='utf-8-sig')).body:
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'RELEASE_PRERELEASE' for t in node.targets):
+            value = ast.literal_eval(node.value)
+            if not isinstance(value, bool):
+                raise ValueError('RELEASE_PRERELEASE must be True or False.')
+            return value
+    return False
+
+
 def git(root, *args):
     result = subprocess.run(['git', '-C', str(root), *args], capture_output=True, text=True, encoding='utf-8', errors='replace')
     if result.returncode:
@@ -147,6 +160,7 @@ def main():
         tag = validate_tag(version, args.tag or 'v' + version)
         print('version=' + version)
         print('tag=' + tag)
+        print('prerelease=' + str(source_prerelease()).lower())
     else:
         validate_tag(args.version, args.tag)
         notes = args.notes.read_text(encoding='utf-8')

@@ -2,6 +2,9 @@ $ErrorActionPreference = 'Stop'
 $version = $env:RELEASE_VERSION
 $tag = $env:RELEASE_TAG
 $repository = $env:GITHUB_REPOSITORY
+$prerelease = $env:RELEASE_PRERELEASE -eq 'true'
+$releaseMode = $prerelease.ToString().ToLowerInvariant()
+$makeLatest = (-not $prerelease).ToString().ToLowerInvariant()
 if ($version -notmatch '^\d+\.\d+\.\d+$' -or $tag -notin @($version, "v$version")) { throw 'Invalid release version or tag.' }
 $assets = Join-Path $PWD 'release-assets'
 $msi = Join-Path $assets "ChzzkAutoCategory-$version.msi"
@@ -25,15 +28,15 @@ foreach ($release in $allReleases) {
 }
 $existing = @($allReleases | Where-Object { $_.tag_name -eq $tag })
 if ($existing.Count -eq 0) {
-    gh release create $tag --repo $repository --target $env:BUILD_SOURCE_SHA --title "CHZZK Auto Category $version" --draft --notes-file $notes
+    gh release create $tag --repo $repository --target $env:BUILD_SOURCE_SHA --title "CHZZK Auto Category $version" --draft --notes-file $notes "--prerelease=$releaseMode"
 } else {
     if (-not $existing[0].draft) { throw 'Refusing to replace an existing published release.' }
-    gh release edit $tag --repo $repository --notes-file $notes
+    gh release edit $tag --repo $repository --notes-file $notes "--prerelease=$releaseMode"
 }
 if ($LASTEXITCODE -ne 0) { throw 'Draft release creation/update failed.' }
 gh release upload $tag $msi $checksum $metadata $notes $changelog --repo $repository --clobber
 if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed; the release remains a draft.' }
-gh release edit $tag --repo $repository --draft=false --latest
+gh release edit $tag --repo $repository --draft=false "--prerelease=$releaseMode" "--latest=$makeLatest"
 if ($LASTEXITCODE -ne 0) { throw 'Publishing the tested release failed.' }
 
 # Fetch current main so unrelated commits and next-version notes stay intact.

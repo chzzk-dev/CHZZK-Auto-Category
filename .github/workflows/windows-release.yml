@@ -24,7 +24,7 @@ permissions:
 
 concurrency:
   group: windows-msi-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || contains(github.event.head_commit.message, '[cancel obsolete builds]') }}
 
 jobs:
   build:
@@ -34,6 +34,7 @@ jobs:
       version: ${{ steps.resolve.outputs.version }}
       tag: ${{ steps.resolve.outputs.tag }}
       publish: ${{ steps.resolve.outputs.publish }}
+      prerelease: ${{ steps.resolve.outputs.prerelease }}
     env:
       QT_QPA_PLATFORM: offscreen
       PYTHONUTF8: '1'
@@ -75,7 +76,7 @@ jobs:
             $releases = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
             if ($LASTEXITCODE -ne 0) { throw 'Could not inspect existing releases for automatic publication.' }
             foreach ($release in $releases) {
-              if ($release.draft -or $release.prerelease) { continue }
+              if ($release.draft) { continue }
               $version = $release.tag_name -replace '^v', ''
               if ($version -match '^\d+\.\d+\.\d+$' -and [version]$version -ge [version]$sourceVersion) { $publish = $false }
             }
@@ -179,6 +180,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       RELEASE_VERSION: ${{ needs.build.outputs.version }}
       RELEASE_TAG: ${{ needs.build.outputs.tag }}
+      RELEASE_PRERELEASE: ${{ needs.build.outputs.prerelease }}
       BUILD_SOURCE_SHA: ${{ github.sha }}
     steps:
       - name: Checkout publication helpers
