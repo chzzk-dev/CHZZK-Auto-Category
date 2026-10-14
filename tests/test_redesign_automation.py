@@ -240,6 +240,25 @@ class WorkerSafetyTests(unittest.TestCase):
             self.worker.scan()
         self.assertEqual(self.worker.config['auto_pending'], [])
 
+    def test_quick_tft_selection_uses_verified_api_id_and_shared_executables(self):
+        self.worker.api.search.return_value = [category('actual-tft-id', '전략적 팀 전투')]
+        self.worker.command('quick_game_mode', {'token': 'pick', 'process': 'LeagueClient.exe', 'game': 'Teamfight Tactics'})
+        ready = next(e for e in self.events if e['kind'] == 'quick_rule_ready')
+        self.assertEqual(ready['data']['category_id'], 'actual-tft-id')
+        self.assertEqual(ready['data']['game_name'], 'Teamfight Tactics')
+        self.assertIn('League of Legends.exe', ready['data']['process_aliases'])
+        self.worker.api.apply.assert_not_called()
+
+    def test_quick_selection_never_saves_an_ambiguous_or_wrong_category(self):
+        for rows in ([category('wrong', '리그 오브 레전드')],
+                     [category('one', '전략적 팀 전투'), category('two', '전략적 팀 전투')]):
+            self.events.clear()
+            self.worker.mapper.clear_search_cache()
+            self.worker.api.search.return_value = rows
+            self.worker.command('quick_game_mode', {'token': 'pick', 'process': 'LeagueClient.exe', 'game': 'Teamfight Tactics'})
+            self.assertFalse(any(e['kind'] == 'quick_rule_ready' for e in self.events))
+            self.assertTrue(any(e['kind'] == 'quick_rule_error' for e in self.events))
+
     def test_live_only_holds_an_offline_broadcast(self):
         self.worker.config['only_when_live'] = True
         self.worker.api.is_live.return_value = False

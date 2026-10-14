@@ -539,6 +539,35 @@ class Worker(QThread):
         elif name == 'check':
             current = self.client().settings()
             self.emit('checked', text='연결 성공 · ' + str((current.get('category') or {}).get('categoryValue', '카테고리 없음')), category_name=str((current.get('category') or {}).get('categoryValue') or '카테고리 없음'))
+        elif name == 'quick_game_mode':
+            from normalization import normalized_name
+            targets = {'League of Legends': ('리그 오브 레전드', 'League of Legends'),
+                       'Teamfight Tactics': ('전략적 팀 전투', 'Teamfight Tactics')}
+            token = value.get('token')
+            game = value.get('game')
+            process = value.get('process', '')
+            try:
+                if game not in targets or process.casefold() not in ('leagueclient.exe', 'league of legends.exe'):
+                    raise ValueError('Invalid game selection')
+                exact = {}
+                for query in targets[game]:
+                    rows = self.mapper._cached_search(query, lambda q: self.client().search(q, self.chzzk_open))
+                    for c in rows:
+                        if (c.get('categoryId') and c.get('categoryType', 'GAME') == 'GAME'
+                                and normalized_name(c.get('categoryValue', '')) in {normalized_name(n) for n in targets[game]}):
+                            exact[c['categoryId']] = c
+                    if exact:
+                        break
+                if len(exact) != 1 or self.cancel.is_set():
+                    raise ValueError('Category could not be uniquely verified')
+                c = next(iter(exact.values()))
+                rule = Rule(process, c['categoryId'], c['categoryValue'], 'GAME', game,
+                            '사용자 카테고리 선택 · 검색 결과 검증',
+                            tuple(p for p in ('LeagueClient.exe', 'League of Legends.exe') if p.casefold() != process.casefold()))
+                self.emit('quick_rule_ready', token=token, data=asdict(rule))
+            except Exception as exc:
+                self.emit('log', text='[카테고리 검색] 빠른 게임 선택 실패: ' + str(exc))
+                self.emit('quick_rule_error', token=token, text='카테고리를 확인하지 못했습니다. 다시 누르거나 다른 카테고리를 선택해 주세요.')
         elif name == 'search':
             data = self.mapper._cached_search(value['keyword'], lambda query: self.client().search(query, self.chzzk_open))
             self.emit('search', request=value['request'], data=data,

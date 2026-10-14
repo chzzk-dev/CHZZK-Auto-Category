@@ -159,6 +159,48 @@ class ModernUiTests(unittest.TestCase):
         self.assertEqual(w.pages.currentIndex(), 2)
         w.hide()
 
+    def test_simple_game_dialog_hides_technical_fields_and_has_two_mode_buttons(self):
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QDialog, QPushButton, QLineEdit
+        w = self.window
+        w.auto_rules = [Rule('LeagueClient.exe', 'lol', '리그 오브 레전드', game_name='League of Legends')]
+        w.refresh_table()
+        w.table.selectRow(0)
+        results = []
+        def inspect():
+            dlg = next(d for d in w.findChildren(QDialog) if d.isVisible())
+            results.append(not any(x.isVisible() for x in dlg.findChildren(QLineEdit)))
+            titles = [b.text() for b in dlg.findChildren(QPushButton) if b.isVisible()]
+            results.append('롤' in titles and '롤토체스' in titles)
+            next(b for b in dlg.findChildren(QPushButton) if b.text() == '고급 설정 보기').click()
+            results.append(any(x.isVisible() for x in dlg.findChildren(QLineEdit)))
+            dlg.reject()
+        QTimer.singleShot(0, inspect)
+        w.show_game_details()
+        self.assertEqual(results, [True, True, True])
+
+    def test_tft_button_saves_manual_mode_without_another_dialog(self):
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QDialog, QPushButton
+        from dataclasses import asdict
+        w = self.window
+        w.auto_rules = [Rule('LeagueClient.exe', 'lol', '리그 오브 레전드', game_name='League of Legends')]
+        w.refresh_table()
+        w.table.selectRow(0)
+        def reply(name, value=None):
+            if name == 'quick_game_mode':
+                rule = Rule('LeagueClient.exe', 'actual-tft', '전략적 팀 전투', game_name='Teamfight Tactics', process_aliases=('League of Legends.exe',))
+                w.on_event({'kind': 'quick_rule_ready', 'token': value['token'], 'data': asdict(rule)})
+        def choose():
+            dlg = next(d for d in w.findChildren(QDialog) if d.isVisible())
+            next(b for b in dlg.findChildren(QPushButton) if b.text() == '롤토체스').click()
+        with patch.object(w.worker, 'submit', side_effect=reply):
+            QTimer.singleShot(0, choose)
+            w.show_game_details()
+        self.assertEqual(w.rules[0].category_id, 'actual-tft')
+        self.assertEqual(w.auto_rules, [])
+        self.assertEqual(w.quick_rule_callbacks, {})
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -150,6 +150,7 @@ class ModernWindowMixin:
     def __init__(self, config, preview=False):
         self.ui_ready = False
         self.runtime_games = {}
+        self.quick_rule_callbacks = {}
         self.recent_activity = deque(maxlen=5)
         self.last_category = None
         self.connection_retry_at = 0
@@ -333,7 +334,7 @@ class ModernWindowMixin:
         for i in (3, 4, 5):
             h.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
         self.table.selectionModel().selectionChanged.connect(lambda *_: self.update_rule_selection_info())
-        self.table.clicked.connect(lambda *_: self.show_game_details())
+        self.table.clicked.connect(lambda index: self.show_game_details() if index.column() == 5 else None)
         self.table.doubleClicked.connect(lambda *_: self.show_game_details())
         layout.addWidget(self.table, 1)
         self.rule_empty = label('등록된 게임이 없습니다. 게임을 실행하거나 게임 추가를 선택해 주세요.', 'emptyRules')
@@ -343,7 +344,7 @@ class ModernWindowMixin:
         layout.addWidget(self.rule_selection_info)
         row = QHBoxLayout()
         row.addWidget(action('수정', self.edit_rule, 'edit'))
-        row.addWidget(action('자세히', self.show_game_details, 'details'))
+        row.addWidget(action('간편 설정', self.show_game_details, 'details'))
         row.addWidget(action('삭제', self.remove_rule, 'delete'))
         row.addStretch()
         row.addWidget(action('위로', lambda: self.move_rule(-1), 'up'))
@@ -476,9 +477,73 @@ class ModernWindowMixin:
         if not row:
             return
         dlg = QDialog(self)
-        dlg.setWindowTitle(row['game'] + ' · 게임 상세')
-        dlg.resize(620, 720)
+        dlg.setWindowTitle(row['game'] + ' · 간편 설정')
+        dlg.resize(560, 380)
         layout = QVBoxLayout(dlg)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(14)
+        summary, summary_box = card(row['game'])
+        summary_box.addWidget(label('방송 카테고리: ' + row['category'], 'statusCardValue'))
+        summary_box.addWidget(label('게임을 켜면 선택한 카테고리로 자동 변경합니다.'))
+        layout.addWidget(summary)
+        quick_message = label('')
+        quick_message.setObjectName('quickMessage')
+        layout.addWidget(quick_message)
+        quick_tokens = []
+        quick_buttons = []
+
+        def choose_mode(canonical):
+            import uuid
+            token = uuid.uuid4().hex
+            quick_tokens.append(token)
+            quick_message.setText('카테고리를 확인하고 있습니다…')
+            for button in quick_buttons:
+                button.setEnabled(False)
+
+            def complete(event):
+                for button in quick_buttons:
+                    button.setEnabled(True)
+                if event['kind'] == 'quick_rule_error':
+                    quick_message.setText(event['text'])
+                    return
+                rule = Rule(**event['data'])
+                before = (list(self.rules), list(self.auto_rules), list(self.auto_pending))
+                occupied = {p.casefold() for p in rule.processes}
+                self.rules = [r for r in self.rules if not occupied.intersection(p.casefold() for p in r.processes)]
+                self.auto_rules = [r for r in self.auto_rules if not occupied.intersection(p.casefold() for p in r.processes)]
+                self.auto_pending = [item for item in self.auto_pending if str(item.get('process', '')).casefold() not in occupied]
+                self.rules.append(rule)
+                if self.persist():
+                    self.refresh_table()
+                    dlg.accept()
+                else:
+                    self.rules, self.auto_rules, self.auto_pending = before
+                    quick_message.setText('저장하지 못했습니다. 다시 시도해 주세요.')
+            self.quick_rule_callbacks[token] = complete
+            self.worker.submit('quick_game_mode', {'token': token, 'process': row['process'], 'game': canonical})
+
+        league = row['process'].casefold() in ('leagueclient.exe', 'league of legends.exe')
+        if league:
+            layout.addWidget(label('어떤 게임을 플레이하나요? 선택을 기억합니다. 바꿀 때 여기서 다시 선택하세요.'))
+            choices = QHBoxLayout()
+            for title, canonical in (('롤', 'League of Legends'), ('롤토체스', 'Teamfight Tactics')):
+                button = action(title, lambda _checked=False, name=canonical: choose_mode(name), 'games', True)
+                quick_buttons.append(button)
+                choices.addWidget(button)
+            layout.addLayout(choices)
+        else:
+            def use_category():
+                if row.get('rule'):
+                    self.convert_rule('manual', row['process'])
+                    dlg.accept()
+                else:
+                    dlg.accept()
+                    self.edit_rule()
+            layout.addWidget(action('이 카테고리로 사용' if row.get('rule') else '카테고리 찾기', use_category, 'success', True))
+        layout.addWidget(action('다른 카테고리 선택', lambda: (dlg.accept(), self.edit_rule()), 'search'))
+        advanced_toggle = QPushButton('고급 설정 보기')
+        advanced_toggle.setCheckable(True)
+        layout.addWidget(advanced_toggle)
         body = QWidget()
         form = QFormLayout(body)
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
@@ -502,9 +567,19 @@ class ModernWindowMixin:
         excluded = QCheckBox('자동 감지에서 제외')
         excluded.setChecked(row['process'].casefold() in {p.casefold() for p in self.config.get('excluded_processes', [])})
         form.addRow(excluded)
-        layout.addWidget(scroll_page(body))
-        message = label('별칭을 저장하면 이후 검색에 사용합니다. 실행 파일만으로 TFT를 추측하지 않습니다.')
-        layout.addWidget(message)
+        advanced = QWidget()
+        advanced_layout = QVBoxLayout(advanced)
+        advanced_layout.setContentsMargins(0, 0, 0, 0)
+        advanced_layout.addWidget(scroll_page(body))
+        message = label('별칭과 실행 파일은 필요한 경우에만 변경하세요.')
+        advanced_layout.addWidget(message)
+        layout.addWidget(advanced)
+        advanced.hide()
+        def toggle_advanced(opened):
+            advanced.setVisible(opened)
+            advanced_toggle.setText('고급 설정 접기' if opened else '고급 설정 보기')
+            dlg.resize(680, 820) if opened else dlg.resize(560, 380)
+        advanced_toggle.toggled.connect(toggle_advanced)
 
         def save_details():
             book = copy.deepcopy(self.config.get('game_aliases', {}))
@@ -543,13 +618,18 @@ class ModernWindowMixin:
         tools.addWidget(action('재검색', lambda: self.worker.submit('research_game', row['process']), 'refresh'))
         tools.addWidget(action('직접 선택', lambda: (dlg.accept(), self.edit_rule()), 'search'))
         tools.addWidget(action('대표 게임', lambda: (self.choose_representative(row['process']), dlg.accept()), 'games'))
-        layout.addLayout(tools)
+        advanced_layout.addLayout(tools)
         tools = QHBoxLayout()
         tools.addWidget(action('수동 연결', lambda: (self.convert_rule('manual', row['process']), dlg.accept()), 'edit'))
         tools.addWidget(action('자동 연결', lambda: (self.convert_rule('auto', row['process']), dlg.accept()), 'automation'))
         tools.addWidget(action('감지 기록', lambda: (dlg.accept(), self.nav.setCurrentRow(5)), 'logs'))
         tools.addWidget(action('저장', save_details, 'success', True))
-        layout.addLayout(tools)
+        advanced_layout.addLayout(tools)
+        layout.addWidget(action('닫기', dlg.reject, 'close'))
+        def clean_callbacks(*_):
+            for token in quick_tokens:
+                self.quick_rule_callbacks.pop(token, None)
+        dlg.finished.connect(clean_callbacks)
         dlg.exec()
         dlg.deleteLater()
 
@@ -728,6 +808,11 @@ class ModernWindowMixin:
         # Existing tests/controller clients may call the method on a minimal host.
         from main import ExistingWindow
         kind = event['kind']
+        if kind in ('quick_rule_ready', 'quick_rule_error'):
+            callback = self.quick_rule_callbacks.pop(event.get('token'), None)
+            if callback:
+                callback(event)
+            return
         if kind == 'pipeline_remove' and hasattr(self, 'runtime_games'):
             self.runtime_games.pop(event.get('key'), None)
             return
