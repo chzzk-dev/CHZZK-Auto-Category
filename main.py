@@ -16,12 +16,26 @@ from core import Rule, channel_id
 from storage import (data_dir, load_config, save_config, set_windows_autostart,
                      ensure_start_menu_shortcut)
 from bridge import LocalExtensionBridge, BridgeError
-from autodetect import cleanup_auto_mappings, serialize_rules, is_ignored_process
+from autodetect import (cleanup_auto_mappings, serialize_rules, is_ignored_process,
+                        category_choice_process_key)
 from worker import Worker
 from version import APP_VERSION
 from onboarding import FirstRunSetup, needs_setup
 from updater import UpdateCheckWorker, AutoUpdateWindow
 from ui_components import information as show_info, warning as show_warning, error as show_error
+
+
+def play_pending_alert():
+    """Play a short notification without blocking game detection or the UI."""
+    if sys.platform == 'win32':
+        try:
+            import winsound
+            winsound.PlaySound('SystemExclamation', winsound.SND_ALIAS | winsound.SND_ASYNC)
+            return
+        except (ImportError, OSError, RuntimeError):
+            pass
+    QApplication.beep()
+
 
 STYLE = r'''
 QWidget {
@@ -1639,6 +1653,8 @@ class Window(QMainWindow):
 
         self.notify = QCheckBox('카테고리 변경 시 트레이 알림 표시')
         self.notify.setChecked(self.config.get('notify', True))
+        self.pending_sound = QCheckBox('자동 감지 대기 목록에 새 게임이 추가되면 알림음 재생')
+        self.pending_sound.setChecked(self.config.get('pending_sound', True))
         self.auto_detect = QCheckBox('Discord 목록 기반 자동 게임 감지 사용')
         self.auto_detect.setChecked(self.config.get('auto_detect', True))
         self.auto_aggressive = QCheckBox('자동 선택 강화: 명확한 단일 후보만 자동 확정')
@@ -1653,7 +1669,7 @@ class Window(QMainWindow):
         self.auto_update.setChecked(self.config.get('auto_update', True))
         self.update_notify = QCheckBox('새 업데이트 발견 시 트레이 알림 표시')
         self.update_notify.setChecked(self.config.get('update_notify', True))
-        for item in (self.notify, self.auto_detect, self.auto_aggressive,
+        for item in (self.notify, self.pending_sound, self.auto_detect, self.auto_aggressive,
                      self.start_hidden, self.autostart, self.auto_start_change, self.auto_update, self.update_notify):
             behavior_layout.addWidget(item)
         layout.addWidget(behavior_card)
@@ -2062,6 +2078,7 @@ class Window(QMainWindow):
     def save_options(self):
         autostart = self.autostart.isChecked()
         self.config.update(interval=int(self.interval.currentData()), notify=self.notify.isChecked(),
+                           pending_sound=self.pending_sound.isChecked(),
                            start_hidden=self.start_hidden.isChecked(),
                            autostart=autostart,
                            auto_update=self.auto_update.isChecked(),
@@ -2315,11 +2332,17 @@ class Window(QMainWindow):
             self.persist()
             self.refresh_table()
         elif kind == 'auto_pending':
+            old_keys = {category_choice_process_key(item.get('process', ''))
+                        for item in self.auto_pending if isinstance(item, dict)}
             self.auto_pending = [item for item in event.get('data', []) if isinstance(item, dict)]
+            new_keys = {category_choice_process_key(item.get('process', ''))
+                        for item in self.auto_pending} - old_keys - {''}
             self.config['auto_pending'] = list(self.auto_pending)
             self.persist()
             self.refresh_table()
             self.refresh_pending_page()
+            if new_keys and not self.preview and self.config.get('pending_sound', True):
+                play_pending_alert()
         elif kind in ('applied', 'log'):
             self.append_log(event['text'])
             if kind == 'applied':

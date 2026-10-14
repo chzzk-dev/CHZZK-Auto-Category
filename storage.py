@@ -27,6 +27,7 @@ DEFAULT_CONFIG = {
     'auto_resolve_shared': False,
     'discord_refresh_hours': 24,
     'notify': True,
+    'pending_sound': True,
     'start_hidden': False,
     'autostart': True,
     'auto_update': True,
@@ -58,6 +59,7 @@ def normalize_config(value):
     # Name-only detection cannot distinguish games sharing one executable name.
     config['auto_resolve_shared'] = False
     config['notify'] = bool(config.get('notify', True))
+    config['pending_sound'] = bool(config.get('pending_sound', True))
     config['start_hidden'] = bool(config.get('start_hidden', False))
     config['autostart'] = bool(config.get('autostart', True))
     config['auto_update'] = bool(config.get('auto_update', True))
