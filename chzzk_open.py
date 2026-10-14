@@ -2,7 +2,7 @@ import os
 import requests
 
 OPEN_API_BASE = 'https://openapi.chzzk.naver.com'
-APP_CLIENT_ID = os.environ.get('CHZZK_CLIENT_ID') or 'febf777f-05d0-46b7-8402-2c9b9506bb72'
+APP_CLIENT_ID = os.environ.get('CHZZK_CLIENT_ID', '')
 APP_CLIENT_SECRET = os.environ.get('CHZZK_CLIENT_SECRET', '')
 
 
