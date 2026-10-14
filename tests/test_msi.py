@@ -33,7 +33,7 @@ class MsiPackageTests(unittest.TestCase):
     def test_every_payload_file_is_owned_and_escaped(self):
         root = self.source()
         sources = [Path(f.attrib['Source']) for f in root.findall('.//w:File', Q)]
-        self.assertCountEqual(sources, [p for p in self.payload.rglob('*') if p.is_file()])
+        self.assertCountEqual([p.resolve() for p in sources], [p.resolve() for p in self.payload.rglob('*') if p.is_file()])
         self.assertEqual(len(root.findall('.//w:Shortcut', Q)), 1)
         self.assertEqual(root.find('.//w:MediaTemplate', Q).get('EmbedCab'), 'yes')
         launch = root.find(".//w:CustomAction[@Id='LaunchApp']", Q)
@@ -230,7 +230,7 @@ class MsiUpdateTests(unittest.TestCase):
                     with self.assertRaises(RuntimeError):
                         updater_app._install_msi(package, install, log)
                 args = run.call_args.args[0]
-                self.assertIn('INSTALLFOLDER=/app dir', args)
+                self.assertIn('INSTALLFOLDER=' + str(install), args)
                 self.assertIn('/norestart', args)
 
 
