@@ -37,161 +37,8 @@ def play_pending_alert():
     QApplication.beep()
 
 
-STYLE = r'''
-QWidget {
-    font-family: "Pretendard", "SUIT Variable", "Noto Sans KR", "Malgun Gothic";
-    font-size: 13px;
-    color: #f3f4f6;
-}
-QMainWindow#appWindow, QWidget#windowRoot { background: transparent; }
-QFrame#shell {
-    background: #11141b;
-    border: 1px solid #27303d;
-    border-radius: 18px;
-}
-QFrame#titleBar {
-    background: #141821;
-    border: none;
-    border-bottom: 1px solid #252c38;
-    border-top-left-radius: 18px;
-    border-top-right-radius: 18px;
-}
-QLabel#titleBarApp { font-size: 12px; font-weight: 700; color: #dfe3e7; }
-QLabel#titleBarVersion { font-size: 11px; color: #6f7780; }
-QPushButton#windowButton {
-    background: transparent; border: none; border-radius: 6px;
-    min-width: 34px; max-width: 34px; min-height: 28px; max-height: 28px;
-    padding: 0; color: #a9b0b7; font-size: 15px;
-}
-QPushButton#windowButton:hover { background: #27303d; color: #ffffff; }
-QPushButton#windowClose:hover { background: #d94b56; color: #ffffff; }
-QFrame#sidebar {
-    background: #151922;
-    border: none;
-    border-right: 1px solid #252c38;
-    border-bottom-left-radius: 18px;
-}
-QFrame#brandCard { background: #191e27; border: 1px solid #27303d; border-radius: 11px; }
-QLabel#brandIcon { background: transparent; border: none; }
-QLabel#brandTitle { font-size: 13px; font-weight: 800; color: #f7f8fa; }
-QLabel#brandSub { color: #777f87; font-size: 10px; }
-QLabel#navSection { color: #616971; font-size: 10px; font-weight: 700; padding: 8px 10px 2px 10px; }
-QListWidget#navList { background: transparent; border: none; outline: 0; }
-QListWidget#navList::item {
-    margin: 2px 0; border: 1px solid transparent; border-radius: 8px;
-    padding: 9px 11px; color: #9ca3aa;
-}
-QListWidget#navList::item:selected {
-    background: #1e2530; border: 1px solid #323c4a; color: #ffffff; font-weight: 700;
-}
-QListWidget#navList::item:hover:!selected { background: #1c222c; color: #e7eaed; }
-QFrame#sidebarStatus { background: #181d27; border: 1px solid #27303d; border-radius: 10px; }
-QLabel#sidebarStatusTitle { color: #dfe3e7; font-size: 11px; font-weight: 700; }
-QLabel#sidebarStatusText { color: #7f878f; font-size: 10px; }
-QFrame#contentCard { background: #11141b; border: none; border-bottom-right-radius: 18px; }
-QLabel#pageTitle { font-size: 25px; font-weight: 800; color: #f8f9fa; }
-QLabel#pageSub { color: #858d95; font-size: 12px; }
-QLabel#sectionTitle { color: #f0f2f4; font-size: 14px; font-weight: 750; }
-QLabel#sectionInfo, QLabel#softHint { color: #858d95; }
-QLabel#settingTitle { color: #eff1f3; font-weight: 700; }
-QFrame#settingsCard, QFrame#panelCard, QFrame#statusCard {
-    background: #151922; border: 1px solid #27303d; border-radius: 11px;
-}
-QFrame#statusCardGood { background: #151922; border: 1px solid #285d4c; border-radius: 11px; }
-QLabel#statusCardTitle { color: #8a929a; font-size: 11px; }
-QLabel#statusCardValue { color: #f5f6f7; font-size: 15px; font-weight: 780; }
-QLabel#statusCardMeta { color: #707880; font-size: 10px; }
-QLabel#statusDotOn { color: #25d39c; font-size: 20px; }
-QLabel#statusDotOff { color: #626970; font-size: 20px; }
-QLabel#ruleStatsText { color: #929aa2; font-size: 12px; padding: 2px 1px 4px 1px; }
-QLineEdit#ruleSearch { min-height: 32px; max-height: 32px; padding: 5px 10px; }
-QTableWidget#rulesTable, QTableWidget#pendingTable {
-    background: #10141b; border: 1px solid #27303d; border-radius: 9px;
-    alternate-background-color: #141922; outline: 0;
-}
-QTableWidget#rulesTable::item, QTableWidget#pendingTable::item {
-    padding: 11px 9px; border-bottom: 1px solid #22262a;
-}
-QTableWidget#rulesTable::item:hover, QTableWidget#pendingTable::item:hover { background: #202733; }
-QTableWidget#rulesTable::item:selected, QTableWidget#pendingTable::item:selected { background: #27313d; color: #ffffff; }
-QTableWidget QHeaderView::section, QHeaderView::section {
-    background: #191e27; color: #aab4c3; padding: 10px; border: none;
-    border-bottom: 1px solid #323c4a; font-weight: 700;
-}
-QLabel#emptyRules, QLabel#emptyPending {
-    background: #151922; border: 1px dashed #303947; border-radius: 9px;
-    padding: 28px; color: #7f878f;
-}
-QLabel#ruleSelectionInfo { color: #8b939a; padding: 3px 2px; }
-QLabel#inlineStatus, QLabel#pendingBadge {
-    background: #171c25; border: 1px solid #26303c; border-radius: 8px;
-    padding: 10px 12px; color: #dfe3e7;
-}
-QPushButton {
-    background: #181d27; border: 1px solid #303947; border-radius: 8px;
-    padding: 8px 13px; color: #e6e9eb; min-height: 22px;
-}
-QPushButton:hover { background: #262a2e; border-color: #465365; }
-QPushButton:pressed { background: #10141b; }
-QPushButton:disabled { color: #5e656b; border-color: #222936; background: #141821; }
-QPushButton#primary {
-    background: #25d39c; color: #11141b; border: 1px solid #35e1aa; font-weight: 850;
-}
-QPushButton#primary:hover { background: #35e1aa; }
-QPushButton#dangerButton { color: #ef8f97; border-color: #6e3c4b; }
-QPushButton#dangerButton:hover { background: #351d26; }
-QPushButton#moveButton { min-width: 72px; }
-QLineEdit, QComboBox, QSpinBox {
-    background: #151922; border: 1px solid #303947; border-radius: 8px;
-    padding: 8px 10px; selection-background-color: #1d8f6d; color: #eef0f2;
-}
-QLineEdit:focus, QComboBox:focus, QSpinBox:focus { border: 1px solid #25d39c; }
-QComboBox QAbstractItemView, QListWidget, QTextEdit {
-    background: #151922; border: 1px solid #303947; border-radius: 8px;
-    color: #e9ecee; selection-background-color: #27313d; selection-color: #ffffff; outline: 0;
-}
-QComboBox QAbstractItemView::item { min-height: 28px; padding: 5px 8px; }
-QListWidget::item { padding: 8px; border-bottom: 1px solid #232a35; }
-QListWidget::item:selected { background: #27313d; }
-QTextEdit#activityLog { background: #0d1118; color: #d3d7db; border-radius: 9px; }
-QCheckBox { color: #d0d4d7; spacing: 8px; }
-QCheckBox::indicator {
-    width: 16px; height: 16px; border-radius: 4px; border: 1px solid #515d6d; background: #151922;
-}
-QCheckBox::indicator:checked { background: #25d39c; border: 1px solid #35e1aa; }
-QMenu { background: #151922; border: 1px solid #303947; padding: 6px; }
-QMenu::item { padding: 9px 26px 9px 24px; border-radius: 6px; }
-QMenu::item:selected { background: #26303c; }
-QMenu::item:disabled { color: #676e74; }
-QMenu::separator { height: 1px; background: #303947; margin: 5px 8px; }
-QScrollArea { background: transparent; border: none; }
-QScrollArea > QWidget > QWidget { background: transparent; }
-QFrame#candidateCard { background: #151922; border: 1px solid #333d4a; border-radius: 9px; }
-QLabel#candidateTitle { font-size: 14px; font-weight: 750; color: #ffffff; }
-QLabel#candidateMeta { color: #98a4b5; font-size: 11px; }
-QSizeGrip { background: transparent; width: 16px; height: 16px; }
-'''
-
-
-def apply_light_theme(app):
-    app.setStyle('Fusion')
-    palette = QPalette()
-    colors = {
-        'Window': '#141821', 'WindowText': '#e8eaec', 'Base': '#151922',
-        'AlternateBase': '#1b1e20', 'Text': '#e8eaec', 'Button': '#1c1f21',
-        'ButtonText': '#e8eaec', 'ToolTipBase': '#202326', 'ToolTipText': '#f0f2f3',
-        'Highlight': '#34383b', 'HighlightedText': '#ffffff',
-        'PlaceholderText': '#777e83', 'Link': '#25d39c',
-        'Light': '#2d3134', 'Midlight': '#272b2e', 'Mid': '#3a3f43',
-        'Dark': '#11141b', 'Shadow': '#090a0b',
-    }
-    for role, color in colors.items():
-        palette.setColor(getattr(QPalette.ColorRole, role), QColor(color))
-    for role in ('Text', 'WindowText', 'ButtonText'):
-        palette.setColor(QPalette.ColorGroup.Disabled, getattr(QPalette.ColorRole, role), QColor('#6f757a'))
-    app.setPalette(palette)
-    app.setStyleSheet(STYLE)
-
+from theme import STYLE, apply_theme as apply_light_theme
+from app_icons import app_icon, set_button_icon
 
 def _resource_path(name):
     """Return a bundled resource path for source and PyInstaller builds."""
@@ -234,6 +81,7 @@ def button(text, callback, primary=False):
     result = QPushButton(text)
     if primary:
         result.setObjectName('primary')
+    set_button_icon(result, next((name for key, name in (('삭제', 'delete'), ('수정', 'edit'), ('검색', 'search'), ('확인', 'refresh'), ('설정', 'settings'), ('저장', 'success'), ('연결', 'connections'), ('트레이', 'tray'), ('로그', 'logs'), ('위로', 'up'), ('아래로', 'down'), ('업데이트', 'download')) if key in text), 'info'))
     result.clicked.connect(callback)
     return result
 
@@ -264,33 +112,36 @@ class CustomTitleBar(QFrame):
         layout.addWidget(version)
         layout.addStretch(1)
 
-        minimize = QPushButton('—')
+        minimize = QPushButton('')
         minimize.setObjectName('windowButton')
         minimize.setToolTip('최소화')
+        set_button_icon(minimize, 'minimize')
         minimize.clicked.connect(window.showMinimized)
         layout.addWidget(minimize)
 
-        self.maximize = QPushButton('□')
+        self.maximize = QPushButton('')
         self.maximize.setObjectName('windowButton')
         self.maximize.setToolTip('최대화 / 복원')
+        set_button_icon(self.maximize, 'maximize')
         self.maximize.clicked.connect(self.toggle_maximize)
         layout.addWidget(self.maximize)
 
-        close = QPushButton('×')
+        close = QPushButton('')
         close.setObjectName('windowClose')
         close.setProperty('class', 'windowClose')
         close.setStyleSheet('QPushButton { background: transparent; border: none; border-radius: 6px; min-width:34px; max-width:34px; min-height:28px; max-height:28px; padding:0; color:#a9b0b7; font-size:16px; } QPushButton:hover { background:#d94b56; color:white; }')
         close.setToolTip('트레이로 숨기기')
+        set_button_icon(close, 'close')
         close.clicked.connect(window.close)
         layout.addWidget(close)
 
     def toggle_maximize(self):
         if self.host.isMaximized():
             self.host.showNormal()
-            self.maximize.setText('□')
+            self.maximize.setText('')
         else:
             self.host.showMaximized()
-            self.maximize.setText('❐')
+            self.maximize.setText('')
         QTimer.singleShot(0, self.host._sync_window_frame)
 
     def mouseDoubleClickEvent(self, event):
@@ -448,59 +299,60 @@ class TrayPopup(QWidget):
         self.setStyleSheet(r'''
             QWidget#trayPopupWindow { background: transparent; }
             QFrame#trayPanel {
-                background: #141821;
-                border: 1px solid #27303d;
+                background: #F7FAFB;
+                border: 1px solid #E3EBEE;
                 border-radius: 20px;
             }
             QLabel#trayAppIcon { background: transparent; border: none; }
-            QLabel#trayTitle { color: #f7f8fa; font-size: 14px; font-weight: 800; }
-            QLabel#trayCaption { color: #8f969e; font-size: 11px; }
+            QLabel#trayTitle { color: #17313C; font-size: 14px; font-weight: 800; }
+            QLabel#trayCaption { color: #6D8490; font-size: 11px; }
             QFrame#trayStatusCard, QFrame#trayInfoCard {
-                background: #151922;
-                border: 1px solid #27303d;
+                background: #FFFFFF;
+                border: 1px solid #E3EBEE;
                 border-radius: 14px;
             }
-            QLabel#trayStatusTitle { color: #f3f5f7; font-size: 13px; font-weight: 750; }
-            QLabel#trayInfoText { color: #b6bcc3; font-size: 11px; }
-            QLabel#traySection { color: #70777f; font-size: 10px; font-weight: 700; padding: 2px 2px 0 2px; }
-            QFrame#trayDivider { background: #2b2f34; border: none; }
+            QLabel#trayStatusTitle { color: #17313C; font-size: 13px; font-weight: 750; }
+            QLabel#trayInfoText { color: #6D8490; font-size: 11px; }
+            QLabel#traySection { color: #6D8490; font-size: 10px; font-weight: 700; padding: 2px 2px 0 2px; }
+            QFrame#trayDivider { background: #E3EBEE; border: none; }
             QPushButton#trayButton {
                 text-align: left;
-                background: #151922;
-                color: #e8eaed;
-                border: 1px solid #27303d;
+                background: #FFFFFF;
+                color: #17313C;
+                border: 1px solid #E3EBEE;
                 border-radius: 13px;
                 min-height: 22px;
                 padding: 10px 13px;
                 font-weight: 650;
             }
-            QPushButton#trayButton:hover { background: #202733; border-color: #3c4758; }
+            QPushButton#trayButton:hover { background: #EDF9F4; border-color: #A8D9CF; }
             QPushButton#trayPrimary {
                 text-align: left;
-                background: #25d39c;
+                background: #35DEB0;
                 color: #071911;
-                border: 1px solid #25d39c;
+                border: 1px solid #35DEB0;
                 border-radius: 13px;
                 min-height: 22px;
                 padding: 10px 13px;
                 font-weight: 800;
             }
-            QPushButton#trayPrimary:hover { background: #35e1aa; border-color: #35e1aa; }
+            QPushButton#trayPrimary:hover { background: #25C99C; border-color: #25C99C; }
             QPushButton#trayDanger {
                 text-align: left;
-                background: #151922;
-                color: #eea1a7;
-                border: 1px solid #39282c;
+                background: #FFFFFF;
+                color: #B94A59;
+                border: 1px solid #EBCBD1;
                 border-radius: 13px;
                 min-height: 22px;
                 padding: 10px 13px;
                 font-weight: 650;
             }
-            QPushButton#trayDanger:hover { background: #2a1b1f; border-color: #66363d; }
+            QPushButton#trayDanger:hover { background: #FCECF0; border-color: #EBCBD1; }
         ''')
 
     def _button(self, text, primary=False, danger=False):
         result = QPushButton(text)
+        set_button_icon(result, 'close' if danger else 'start' if primary else 'info')
         result.setCursor(Qt.CursorShape.PointingHandCursor)
         result.setObjectName('trayPrimary' if primary else ('trayDanger' if danger else 'trayButton'))
         return result
@@ -559,6 +411,7 @@ class TrayPopup(QWidget):
 class RuleDialog(QDialog):
     def __init__(self, parent, existing=None):
         super().__init__(parent)
+        self.existing_rule = existing
         self.setWindowTitle('게임과 카테고리 연결')
         self.resize(680, 610)
         self.worker = parent.worker
@@ -748,7 +601,12 @@ class RuleDialog(QDialog):
                 self.selected['categoryType'],
                 game_name,
                 match_source,
+                getattr(getattr(self, 'existing_rule', None), 'process_aliases', ()),
             )
+            from normalization import normalized_name
+            if self.result_rule.process.casefold() in ('leagueclient.exe', 'league of legends.exe') and normalized_name(self.result_rule.category_name) in ('리그오브레전드', '전략적팀전투'):
+                from dataclasses import replace
+                self.result_rule = replace(self.result_rule, process_aliases=tuple(p for p in ('League of Legends.exe', 'LeagueClient.exe') if p.casefold() != self.result_rule.process.casefold()))
         except ValueError as e:
             show_warning(self, '입력 확인', str(e))
             return
@@ -836,7 +694,7 @@ class CategoryChoiceDialog(QDialog):
         self._accept_current(True)
 
 
-class Window(QMainWindow):
+class ExistingWindow(QMainWindow):
     def __init__(self, config, preview=False):
         super().__init__()
         clean_rules, clean_pending, _removed = cleanup_auto_mappings(
@@ -891,8 +749,8 @@ class Window(QMainWindow):
         self.setObjectName('appWindow')
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        self.resize(1240, 820)
-        self.setMinimumSize(1040, 680)
+        self.resize(1200, 820)
+        self.setMinimumSize(1200, 820)
 
         root = QWidget()
         root.setObjectName('windowRoot')
@@ -952,7 +810,7 @@ class Window(QMainWindow):
         brand_layout.addLayout(brand_text, 1)
         sidebar_layout.addWidget(brand_card)
 
-        nav_section = QLabel('WORKSPACE')
+        nav_section = QLabel('방송 자동화')
         nav_section.setObjectName('navSection')
         sidebar_layout.addWidget(nav_section)
 
@@ -984,6 +842,9 @@ class Window(QMainWindow):
         self.sidebar_auto_state.setObjectName('sidebarStatusText')
         auto_layout.addWidget(auto_title)
         auto_layout.addWidget(self.sidebar_auto_state)
+        version_footer = QLabel('v' + APP_VERSION)
+        version_footer.setObjectName('sidebarStatusText')
+        auto_layout.addWidget(version_footer)
         sidebar_layout.addWidget(auto_card)
 
         tray_button = button('트레이로 숨기기', self.close)
@@ -1041,8 +902,6 @@ class Window(QMainWindow):
             self.update_timer = QTimer(self)
             self.update_timer.timeout.connect(self.check_for_updates)
             self.refresh_update_timer_interval()
-            self.update_timer.start()
-            QTimer.singleShot(5000, self.check_for_updates)
 
 
     def switch_page(self, index):
@@ -1069,95 +928,6 @@ class Window(QMainWindow):
         elif index == 6:
             self.refresh_update_page()
 
-
-    def build_rules(self):
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 6, 0, 0)
-        layout.setSpacing(10)
-
-        rule_guide = QLabel(
-            '수동 규칙을 우선 적용하고 자동 규칙은 Discord 감지 결과를 묶어서 관리합니다. '
-            '같은 게임/카테고리의 보조 실행 파일은 하나의 규칙으로 합쳐집니다.'
-        )
-        rule_guide.setObjectName('sectionInfo')
-        rule_guide.setWordWrap(False)
-        rule_guide.setMaximumHeight(24)
-        layout.addWidget(rule_guide)
-
-        stats_row = QHBoxLayout()
-        stats_row.setContentsMargins(2, 0, 2, 0)
-        stats_row.setSpacing(0)
-        self.rule_stats_text = QLabel('전체: 0   ·   수동: 0   ·   자동: 0   ·   대기: 0')
-        self.rule_stats_text.setObjectName('ruleStatsText')
-        stats_row.addWidget(self.rule_stats_text)
-        stats_row.addStretch(1)
-        layout.addLayout(stats_row)
-
-        toolbar_layout = QHBoxLayout()
-        toolbar_layout.setContentsMargins(0, 0, 0, 0)
-        toolbar_layout.setSpacing(8)
-        self.rule_filter = QLineEdit()
-        self.rule_filter.setObjectName('ruleSearch')
-        self.rule_filter.setPlaceholderText('게임 · 실행 파일 · 카테고리 검색')
-        self.rule_filter.setClearButtonEnabled(True)
-        self.rule_filter.setMinimumWidth(250)
-        self.rule_filter.setMaximumWidth(340)
-        self.rule_filter.textChanged.connect(self.refresh_table)
-        toolbar_layout.addWidget(self.rule_filter, 0)
-        toolbar_layout.addStretch(1)
-        toolbar_layout.addWidget(button('자동 감지 동기화', lambda: self.worker.submit('sync_auto')))
-        toolbar_layout.addWidget(button('미확정 항목', lambda: self.nav.setCurrentRow(3)))
-        layout.addLayout(toolbar_layout)
-
-        self.table = QTableWidget(0, 5)
-        self.table.setObjectName('rulesTable')
-        self.table.setHorizontalHeaderLabels(['순서', '게임', '실행 파일', '치지직 카테고리', '매칭'])
-        header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-        self.table.verticalHeader().hide()
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.table.setAlternatingRowColors(True)
-        self.table.setShowGrid(False)
-        self.table.setWordWrap(False)
-        self.table.setMinimumHeight(300)
-        self.table.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
-        self.table.cellDoubleClicked.connect(lambda *_: self.edit_rule())
-        self.table.itemSelectionChanged.connect(self.update_rule_selection_info)
-        layout.addWidget(self.table, 10)
-
-        self.rule_empty = QLabel('등록된 규칙이 없습니다.\n게임을 실행한 뒤 자동 감지를 기다리거나 “+ 게임 연결”로 직접 추가할 수 있습니다.')
-        self.rule_empty.setObjectName('emptyRules')
-        self.rule_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.rule_empty.setWordWrap(True)
-        self.rule_empty.hide()
-        layout.addWidget(self.rule_empty, 10)
-
-        self.rule_selection_info = QLabel('규칙을 선택하면 수정·삭제·우선순위 변경을 할 수 있습니다.')
-        self.rule_selection_info.setObjectName('ruleSelectionInfo')
-        self.rule_selection_info.setWordWrap(True)
-        layout.addWidget(self.rule_selection_info)
-
-        row = QHBoxLayout()
-        row.setSpacing(8)
-        row.addWidget(button('+ 게임 연결', lambda: self.edit_rule(new=True), True))
-        row.addWidget(button('수정', self.edit_rule))
-        row.addWidget(button('삭제', self.remove_rule))
-        row.addStretch()
-        up = button('↑ 위로', lambda: self.move_rule(-1))
-        down = button('↓ 아래로', lambda: self.move_rule(1))
-        up.setObjectName('moveButton')
-        down.setObjectName('moveButton')
-        row.addWidget(up)
-        row.addWidget(down)
-        layout.addLayout(row)
-        self.pages.addWidget(page)
 
     def build_account(self):
         page = QWidget()
@@ -1228,7 +998,8 @@ class Window(QMainWindow):
         top = QHBoxLayout()
         title_label = QLabel(title)
         title_label.setObjectName('statusCardTitle')
-        dot = QLabel('●')
+        dot = QLabel()
+        dot.setPixmap(app_icon('info', '#6D8490').pixmap(16, 16))
         dot.setObjectName('statusDotOff')
         top.addWidget(title_label)
         top.addStretch(1)
@@ -1382,7 +1153,7 @@ class Window(QMainWindow):
         self.update_current_label = QLabel(f'Windows 앱  {APP_VERSION}')
         self.update_current_label.setObjectName('statusCardValue')
         card_layout.addWidget(self.update_current_label)
-        self.update_extension_label = QLabel('Chrome 확장  0.5.1')
+        self.update_extension_label = QLabel('Chrome 확장  확인할 수 없음')
         self.update_extension_label.setObjectName('softHint')
         card_layout.addWidget(self.update_extension_label)
         self.update_page_status = QLabel('GitHub Releases를 주기적으로 확인합니다.')
@@ -1430,7 +1201,7 @@ class Window(QMainWindow):
         card_layout.addWidget(title)
         detail = QLabel(
             f'Windows 앱 버전: {APP_VERSION}\n'
-            'Chrome 확장 버전: 0.5.1\n'
+            'Chrome 확장 버전: 연결 후 확인\n'
             '설치 경로: C:\\Program Files\\CHZZK Auto Category\n'
             '설정 경로: %LOCALAPPDATA%\\ChzzkAutoCategory\n\n'
             '실행 중인 게임을 감지해 치지직 방송 카테고리를 자동으로 연결하는 로컬 데스크톱 앱입니다.'
@@ -1501,198 +1272,6 @@ class Window(QMainWindow):
             self.install_update_button.setEnabled(False)
             self.install_update_button.setText('대기 중인 업데이트 없음')
 
-
-    def build_options(self):
-        # 설정 항목이 많고 Windows DPI 배율에 따라 세로 공간이 달라질 수 있으므로
-        # 페이지 자체를 스크롤 영역으로 구성합니다. 이렇게 하면 콤보박스와 라벨이
-        # 압축되어 겹치는 현상을 방지할 수 있습니다.
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-
-        page = QWidget()
-        page.setObjectName('optionsPage')
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(12)
-
-        option_guide = QLabel('자동화 강도를 상황에 맞게 조정하고, 감지 빈도와 알림 정책을 관리하세요.')
-        option_guide.setObjectName('sectionInfo')
-        option_guide.setWordWrap(True)
-        layout.addWidget(option_guide)
-
-        schedule_card = QFrame()
-        schedule_card.setObjectName('settingsCard')
-        schedule_layout = QVBoxLayout(schedule_card)
-        schedule_layout.setContentsMargins(14, 14, 14, 14)
-        schedule_layout.setSpacing(12)
-
-        def add_combo_row(title, description, combo):
-            row = QHBoxLayout()
-            row.setContentsMargins(0, 0, 0, 0)
-            row.setSpacing(16)
-
-            text_wrap = QVBoxLayout()
-            text_wrap.setContentsMargins(0, 0, 0, 0)
-            text_wrap.setSpacing(2)
-            title_label = QLabel(title)
-            title_label.setObjectName('settingTitle')
-            description_label = QLabel(description)
-            description_label.setObjectName('softHint')
-            description_label.setWordWrap(True)
-            text_wrap.addWidget(title_label)
-            text_wrap.addWidget(description_label)
-
-            combo.setObjectName('settingCombo')
-            combo.setMinimumHeight(40)
-            combo.setFixedWidth(190)
-            combo.setView(QListView(combo))
-            combo.setMaxVisibleItems(8)
-
-            row.addLayout(text_wrap, 1)
-            row.addWidget(combo, 0, Qt.AlignmentFlag.AlignVCenter)
-            schedule_layout.addLayout(row)
-
-        self.interval = QComboBox()
-        for label, seconds in (
-            ('3초 · 빠름', 3),
-            ('5초 · 권장', 5),
-            ('10초', 10),
-            ('15초', 15),
-            ('30초 · 절전', 30),
-        ):
-            self.interval.addItem(label, seconds)
-        interval_index = self.interval.findData(int(self.config.get('interval', 5)))
-        self.interval.setCurrentIndex(interval_index if interval_index >= 0 else 1)
-        add_combo_row(
-            '게임 감지 주기',
-            '실행 중인 게임 프로세스를 확인하는 간격입니다. 기본값은 5초입니다.',
-            self.interval,
-        )
-
-        self.discord_refresh = QComboBox()
-        for label, hours in (
-            ('6시간', 6),
-            ('12시간', 12),
-            ('24시간 · 권장', 24),
-            ('3일', 72),
-            ('7일', 168),
-        ):
-            self.discord_refresh.addItem(label, hours)
-        discord_index = self.discord_refresh.findData(int(self.config.get('discord_refresh_hours', 24)))
-        self.discord_refresh.setCurrentIndex(discord_index if discord_index >= 0 else 2)
-        add_combo_row(
-            'Discord 게임 목록 갱신',
-            'Discord detectable 게임 목록을 다시 받아오는 주기입니다. 게임 감지 주기와는 별개입니다.',
-            self.discord_refresh,
-        )
-
-        self.update_check_interval = QComboBox()
-        for label, minutes in (
-            ('5분 · 권장', 5),
-            ('10분', 10),
-            ('30분', 30),
-            ('1시간', 60),
-            ('3시간', 180),
-            ('6시간', 360),
-        ):
-            self.update_check_interval.addItem(label, minutes)
-        update_interval_index = self.update_check_interval.findData(
-            int(self.config.get('update_check_minutes', 5))
-        )
-        self.update_check_interval.setCurrentIndex(update_interval_index if update_interval_index >= 0 else 0)
-        add_combo_row(
-            'GitHub 업데이트 확인',
-            '새 GitHub Release를 확인하는 간격입니다. 앱 시작 시에도 한 번 확인합니다.',
-            self.update_check_interval,
-        )
-        layout.addWidget(schedule_card)
-
-        chzzk_card = QFrame()
-        chzzk_card.setObjectName('settingsCard')
-        chzzk_layout = QVBoxLayout(chzzk_card)
-        chzzk_layout.setContentsMargins(14, 14, 14, 14)
-        chzzk_layout.setSpacing(9)
-
-        chzzk_title = QLabel('CHZZK 카테고리 검색 · 공식 + 비공식 조합')
-        chzzk_title.setObjectName('settingTitle')
-        chzzk_layout.addWidget(chzzk_title)
-        chzzk_hint = QLabel(
-            'Discord에서 감지한 게임명과 실행 파일 별칭을 CHZZK 카테고리 ID와 비교해 한국어 후보를 찾습니다. '
-            '공식 Open API 보조 검색을 켜면 결과를 추가로 합치고, 마지막에는 치지직 스튜디오에서 한국어 후보만 검증합니다. '
-            '별도 인증 정보 입력 없이 사용할 수 있습니다.'
-        )
-        chzzk_hint.setObjectName('softHint')
-        chzzk_hint.setWordWrap(True)
-        chzzk_layout.addWidget(chzzk_hint)
-
-        self.chzzk_open_enabled = QCheckBox('CHZZK 공식 Open API 보조 검색 사용')
-        self.chzzk_open_enabled.setChecked(self.config.get('chzzk_open_enabled', True))
-        chzzk_layout.addWidget(self.chzzk_open_enabled)
-
-        self.chzzk_open_status = QLabel(
-            '공식 API 보조 검색 준비됨 · 연결 확인으로 테스트할 수 있습니다.'
-            if self.config.get('chzzk_open_enabled', True)
-            else 'CHZZK 공식 Open API 보조 검색이 꺼져 있습니다.'
-        )
-        self.chzzk_open_status.setObjectName('inlineStatus')
-        self.chzzk_open_status.setWordWrap(True)
-        chzzk_layout.addWidget(self.chzzk_open_status)
-        chzzk_row = QHBoxLayout()
-        chzzk_row.addWidget(button('CHZZK 공식 API 연결 확인', self.test_chzzk_open_connection))
-        chzzk_row.addStretch()
-        chzzk_layout.addLayout(chzzk_row)
-        layout.addWidget(chzzk_card)
-
-        behavior_card = QFrame()
-        behavior_card.setObjectName('settingsCard')
-        behavior_layout = QVBoxLayout(behavior_card)
-        behavior_layout.setContentsMargins(14, 12, 14, 12)
-        behavior_layout.setSpacing(7)
-
-        self.notify = QCheckBox('카테고리 변경 시 트레이 알림 표시')
-        self.notify.setChecked(self.config.get('notify', True))
-        self.pending_sound = QCheckBox('자동 감지 대기 목록에 새 게임이 추가되면 알림음 재생')
-        self.pending_sound.setChecked(self.config.get('pending_sound', True))
-        self.auto_detect = QCheckBox('Discord 목록 기반 자동 게임 감지 사용')
-        self.auto_detect.setChecked(self.config.get('auto_detect', True))
-        self.auto_aggressive = QCheckBox('자동 선택 강화: 명확한 단일 후보만 자동 확정')
-        self.auto_aggressive.setChecked(self.config.get('auto_aggressive', False))
-        self.start_hidden = QCheckBox('직접 실행할 때도 트레이로 시작')
-        self.start_hidden.setChecked(self.config.get('start_hidden', False))
-        self.autostart = QCheckBox('Windows 로그인 시 백그라운드 자동 실행')
-        self.autostart.setChecked(self.config.get('autostart', True))
-        self.auto_start_change = QCheckBox('앱 실행 후 연결되면 자동 변경 시작')
-        self.auto_start_change.setChecked(self.config.get('auto_start_change', True))
-        self.auto_update = QCheckBox('GitHub Releases 새 패치 자동 업데이트')
-        self.auto_update.setChecked(self.config.get('auto_update', True))
-        self.update_notify = QCheckBox('새 업데이트 발견 시 트레이 알림 표시')
-        self.update_notify.setChecked(self.config.get('update_notify', True))
-        for item in (self.notify, self.pending_sound, self.auto_detect, self.auto_aggressive,
-                     self.start_hidden, self.autostart, self.auto_start_change, self.auto_update, self.update_notify):
-            behavior_layout.addWidget(item)
-        layout.addWidget(behavior_card)
-
-        info = QLabel(
-            f'• 앱은 C:\\Program Files\\CHZZK Auto Category에 설치됩니다.\n'
-            '• Windows 로그인 시 메인 창은 띄우지 않고 트레이 + 로컬 브리지만 시작합니다.\n'
-            '• Chrome 확장 연결은 5초마다 자동으로 확인합니다.\n'
-            '• 연결 확인이 성공하면 설정에 따라 자동 변경을 바로 시작합니다.\n'
-            '• 자동 업데이트는 앱 시작 시와 설정한 주기마다 GitHub Releases를 확인합니다.\n'
-            f'• 현재 앱 버전: {APP_VERSION}'
-        )
-        info.setObjectName('softHint')
-        info.setWordWrap(True)
-        layout.addWidget(info)
-        update_hint = QLabel('업데이트 확인과 설치는 왼쪽 ‘업데이트’ 페이지에서 관리할 수 있습니다.')
-        update_hint.setObjectName('softHint')
-        layout.addWidget(update_hint)
-        layout.addWidget(button('설정 저장', self.save_options, True))
-        layout.addStretch()
-
-        scroll.setWidget(page)
-        self.pages.addWidget(scroll)
 
     def build_tray(self):
         self.tray = QSystemTrayIcon(self.windowIcon(), self)
@@ -1792,106 +1371,6 @@ class Window(QMainWindow):
         self.update_window.show()
         self.update_window.raise_()
         self.update_window.activateWindow()
-
-    def selected_rule_location(self):
-        row = self.table.currentRow()
-        if row < 0:
-            return None
-        item = self.table.item(row, 0)
-        data = item.data(Qt.ItemDataRole.UserRole) if item else None
-        return data if isinstance(data, dict) else None
-
-    def select_rule_location(self, kind, index):
-        for row in range(self.table.rowCount()):
-            item = self.table.item(row, 0)
-            data = item.data(Qt.ItemDataRole.UserRole) if item else None
-            if isinstance(data, dict) and data.get('kind') == kind and data.get('index') == index:
-                self.table.selectRow(row)
-                return
-
-    def update_rule_selection_info(self):
-        location = self.selected_rule_location()
-        if not location:
-            self.rule_selection_info.setText('규칙을 선택하면 수정·삭제·우선순위 변경을 할 수 있습니다.')
-            return
-        rules = self.rules if location['kind'] == 'manual' else self.auto_rules
-        index = int(location['index'])
-        if index < 0 or index >= len(rules):
-            return
-        rule = rules[index]
-        kind_label = '수동 규칙' if location['kind'] == 'manual' else '자동 규칙'
-        game_name = str(rule.game_name or '').strip() or Path(rule.process).stem
-        process_text = rule.process
-        if rule.process_aliases:
-            process_text += f' 외 {len(rule.process_aliases)}개'
-        self.rule_selection_info.setText(
-            f'선택됨 · {kind_label} · {game_name} · {process_text} → {rule.category_name}'
-        )
-
-    def refresh_table(self):
-        merged = [('manual', i, rule) for i, rule in enumerate(self.rules)]
-        merged += [('auto', i, rule) for i, rule in enumerate(self.auto_rules)]
-        query = ''
-        if hasattr(self, 'rule_filter'):
-            query = self.rule_filter.text().strip().casefold()
-
-        visible = []
-        for kind, local_index, rule in merged:
-            game_name = str(rule.game_name or '').strip() or Path(rule.process).stem
-            source = str(rule.match_source or '').strip()
-            if not source:
-                source = '수동 선택' if kind == 'manual' else 'Discord 자동 감지'
-            all_processes = ' '.join(rule.processes)
-            haystack = ' '.join((game_name, all_processes, rule.category_name, source)).casefold()
-            if query and query not in haystack:
-                continue
-            visible.append((kind, local_index, rule, game_name, source))
-
-        self.table.setRowCount(len(visible))
-        for row, (kind, local_index, rule, game_name, source) in enumerate(visible):
-            manual = kind == 'manual'
-            global_priority = local_index + 1 if manual else len(self.rules) + local_index + 1
-            priority = f"{global_priority} · {'수동' if manual else '자동'}"
-            process_display = rule.process if not rule.process_aliases else f'{rule.process}  +{len(rule.process_aliases)}'
-            values = (priority, game_name, process_display, rule.category_name, source)
-            metadata = {'kind': kind, 'index': local_index}
-            for column, text in enumerate(values):
-                item = QTableWidgetItem(str(text))
-                if column == 2 and rule.process_aliases:
-                    item.setToolTip('감지 실행 파일\n' + '\n'.join(rule.processes))
-                else:
-                    item.setToolTip(str(text))
-                if column == 0:
-                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                    item.setData(Qt.ItemDataRole.UserRole, metadata)
-                    font = item.font()
-                    font.setBold(True)
-                    item.setFont(font)
-                elif column in (1, 3):
-                    font = item.font()
-                    font.setBold(True)
-                    item.setFont(font)
-                if manual:
-                    item.setBackground(QColor(31, 34, 36, 110))
-                else:
-                    item.setBackground(QColor(22, 25, 27, 90))
-                self.table.setItem(row, column, item)
-            self.table.setRowHeight(row, 50)
-
-        self.rule_stats_text.setText(
-            f'전체: {len(merged)}   ·   수동: {len(self.rules)}   ·   자동: {len(self.auto_rules)}   ·   대기: {len(self.auto_pending)}'
-        )
-
-        has_rows = bool(visible)
-        self.table.setVisible(has_rows)
-        self.rule_empty.setVisible(not has_rows)
-        if not has_rows:
-            if query:
-                self.rule_empty.setText('검색 조건과 일치하는 규칙이 없습니다.\n검색어를 지우거나 다른 키워드로 찾아보세요.')
-            else:
-                self.rule_empty.setText('등록된 규칙이 없습니다.\n게임을 실행한 뒤 자동 감지를 기다리거나 “+ 게임 연결”로 직접 추가할 수 있습니다.')
-        self.update_rule_selection_info()
-        self.refresh_pending_page()
 
     def persist(self):
         candidate = copy.deepcopy(self.config)
@@ -2126,8 +1605,15 @@ class Window(QMainWindow):
         timer = getattr(self, 'update_timer', None)
         if timer is None:
             return
-        minutes = max(5, min(360, int(self.config.get('update_check_minutes', 5))))
-        timer.setInterval(minutes * 60 * 1000)
+        from scheduling import seconds_until_check
+        remaining = seconds_until_check(self.config)
+        timer.setSingleShot(True)
+        if remaining is None:
+            timer.stop()
+        else:
+            timer.setInterval(max(1000, int(remaining * 1000)))
+            if not self.preview:
+                timer.start()
 
     def open_pending_update(self):
         release = self.pending_update_release
@@ -2157,7 +1643,15 @@ class Window(QMainWindow):
                 self.manual_update_check = False
             return
 
-        worker = UpdateCheckWorker(self)
+        from scheduling import seconds_until_check
+        if not force and (seconds_until_check(self.config) or 0) > 1:
+            self.refresh_update_timer_interval()
+            return
+        import time
+        self.config['update_last_checked_at'] = time.time()
+        save_config(self.config)
+        self.refresh_update_timer_interval()
+        worker = UpdateCheckWorker(self, allow_prerelease=self.config.get('allow_prerelease', False))
         self.update_check_worker = worker
         worker.completed.connect(self.on_update_check_completed)
         worker.failed.connect(self.on_update_check_failed)
@@ -2363,7 +1857,7 @@ class Window(QMainWindow):
         if hasattr(self, 'size_grip'):
             self.size_grip.setVisible(not self.isMaximized())
         if hasattr(self, 'title_bar') and hasattr(self.title_bar, 'maximize'):
-            self.title_bar.maximize.setText('❐' if self.isMaximized() else '□')
+            self.title_bar.maximize.setText('')
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -2411,11 +1905,22 @@ class Window(QMainWindow):
         QApplication.instance().quit()
 
 
+from modern_ui import ModernWindowMixin
+
+
+class Window(ModernWindowMixin, ExistingWindow):
+    pass
+
+
 def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     apply_light_theme(app)
     app.setWindowIcon(icon())
+    smoke = next((arg.split('=', 1)[1] for arg in sys.argv if arg.startswith('--ui-smoke-output=')), None)
+    if smoke:
+        from modern_ui import run_packaged_ui_smoke
+        return run_packaged_ui_smoke(smoke)
     lock = QLockFile(str(data_dir() / 'app.lock'))
     if not lock.tryLock(100):
         show_info(None, '이미 실행 중', '시스템 트레이 아이콘에서 메인 인터페이스를 열어 주세요.')

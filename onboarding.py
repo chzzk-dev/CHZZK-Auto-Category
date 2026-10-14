@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QDialog, QFrame,
     QHBoxLayout, QLabel, QLineEdit, QPushButton, QStackedWidget, QVBoxLayout, QWidget)
 from bridge import LocalExtensionBridge, BridgeError
 from core import channel_id
+from app_icons import set_button_icon
 from storage import WEBSTORE_EXTENSION_ID, save_config
 
 
@@ -22,7 +23,7 @@ class FirstRunSetup(QDialog):
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
         self.resize(880, 660)
         self.setMinimumSize(760, 600)
-        self.setStyleSheet('QDialog { background: #11141b; }')
+        self.setStyleSheet('QDialog { background: #F7FAFB; }')
         outer = QVBoxLayout(self)
         outer.setContentsMargins(30, 26, 30, 26)
         outer.setSpacing(18)
@@ -30,7 +31,7 @@ class FirstRunSetup(QDialog):
         heading.setObjectName('sectionTitle')
         outer.addWidget(heading)
         self.steps = QLabel()
-        self.steps.setStyleSheet('color: #25d39c; font-size: 14px; font-weight: bold;')
+        self.steps.setStyleSheet('color: #25C99C; font-size: 14px; font-weight: bold;')
         outer.addWidget(self.steps)
         self.pages = QStackedWidget()
         outer.addWidget(self.pages, 1)
@@ -87,10 +88,10 @@ class FirstRunSetup(QDialog):
         self.allow_unconnected = QCheckBox('확장은 나중에 연결하고 프로그램 먼저 열기')
         layout.addWidget(self.allow_unconnected)
         layout.addStretch()
-        self.note(layout, '완료한 설정창은 다음 실행부터 자동으로 나타나지 않습니다.\n채널과 연결 설정은 프로그램의 “계정” 화면에서 변경할 수 있습니다.')
+        self.note(layout, '완료한 설정창은 다음 실행부터 자동으로 나타나지 않습니다.\n채널과 연결 설정은 프로그램의 “연결 관리 → 계정 설정” 화면에서 변경할 수 있습니다.')
 
         self.error = QLabel('')
-        self.error.setStyleSheet('color: #ff8495;')
+        self.error.setStyleSheet('color: #B94A59;')
         self.error.setWordWrap(True)
         outer.addWidget(self.error)
         actions = QHBoxLayout()
@@ -99,7 +100,7 @@ class FirstRunSetup(QDialog):
         self.back = QPushButton('이전')
         self.back.clicked.connect(lambda: self.show_page(self.pages.currentIndex() - 1))
         self.next = QPushButton('다음')
-        self.next.setStyleSheet('background: #25d39c; color: #071911; font-weight: bold;')
+        self.next.setStyleSheet('background: #25C99C; color: #071911; font-weight: bold;')
         self.next.clicked.connect(self.advance)
         actions.addWidget(cancel)
         actions.addStretch()
@@ -110,6 +111,8 @@ class FirstRunSetup(QDialog):
         self.timer.setInterval(1000)
         self.timer.timeout.connect(self.refresh_connection)
         self.finished.connect(self.cleanup)
+        for widget in self.findChildren(QPushButton):
+            set_button_icon(widget, 'connections' if '연결' in widget.text() else 'success' if widget is self.next else 'info')
         self.show_page(0)
 
     def note(self, layout, text):

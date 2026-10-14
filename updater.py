@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import re
+from release_versions import SemVer
 import shutil
 import subprocess
 import sys
@@ -30,74 +31,30 @@ from version import (
 )
 
 
-UPDATE_STYLE = '''
-QWidget {
-    font-family: "Pretendard", "SUIT Variable", "Noto Sans KR", "Malgun Gothic";
-    color: #e9fff5;
-    font-size: 13px;
-}
-QMainWindow { background: #06110d; }
-QFrame#shell {
-    background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #071a13, stop:0.58 #0a241a, stop:1 #0b3022);
-    border: 1px solid #1f684c;
-    border-radius: 20px;
-}
-QLabel#logo {
-    background: #18d39b;
-    color: #032218;
-    border-radius: 19px;
-    font-size: 20px;
-    font-weight: 900;
-}
-QLabel#title { font-size: 17px; font-weight: 800; color: #f3fff9; }
-QLabel#sub { color: #83ae9a; }
-QLabel#status { font-size: 22px; font-weight: 900; color: #edfff6; }
-QLabel#detail { color: #8eb8a5; }
-QLabel#version {
-    color: #8ce2bd;
-    background: rgba(15, 67, 48, 0.65);
-    border: 1px solid #286f54;
-    border-radius: 10px;
-    padding: 6px 10px;
-}
-QProgressBar {
-    min-height: 15px;
-    max-height: 15px;
-    border: none;
-    border-radius: 7px;
-    background: #102b21;
-    color: transparent;
-}
-QProgressBar::chunk {
-    border-radius: 7px;
-    background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #0fb981, stop:0.55 #19d49b, stop:1 #3cf0bd);
-}
-QPushButton {
-    min-height: 40px;
-    border-radius: 11px;
-    padding: 0 18px;
-    background: #103629;
-    border: 1px solid #2a7256;
-    color: #e4fff2;
-    font-weight: 700;
-}
-QPushButton:hover { background: #154936; border-color: #3a9b75; }
-'''
+from theme import STYLE as SHARED_STYLE, TOKENS
+from app_icons import set_button_icon
+UPDATE_STYLE = SHARED_STYLE + f"""
+QMainWindow {{ background: {TOKENS['background']}; }}
+QFrame#shell {{ background: {TOKENS['background']}; border:1px solid {TOKENS['border']}; border-radius:20px; }}
+QLabel#logo {{ background:{TOKENS['accent']}; color:{TOKENS['text']}; border-radius:16px; font-size:20px; font-weight:800; }}
+QLabel#title {{ font-size:17px; font-weight:700; }}
+QLabel#status {{ font-size:22px; font-weight:800; }}
+QLabel#detail, QLabel#sub {{ color:{TOKENS['muted']}; }}
+QLabel#version {{ color:{TOKENS['success']}; background:#E7F8F1; border-radius:10px; padding:6px 10px; }}
+QProgressBar {{ min-height:15px; max-height:15px; background:#E3EBEE; border:none; border-radius:7px; color:transparent; }}
+QProgressBar::chunk {{ background:{TOKENS['accent']}; border-radius:7px; }}
+"""
 
 
 def _version_tuple(value):
-    text = str(value or '').strip().lstrip('vV')
-    parts = []
-    for chunk in re.split(r'[^0-9]+', text):
-        if chunk:
-            parts.append(int(chunk))
-    while len(parts) < 4:
-        parts.append(0)
-    return tuple(parts[:4])
+    return SemVer(value)
 
 
 def is_newer_version(candidate, current=APP_VERSION):
-    return _version_tuple(candidate) > _version_tuple(current)
+    try:
+        return SemVer(candidate) > SemVer(current)
+    except ValueError:
+        return False
 
 
 def _github_request(url, timeout=12):
@@ -112,16 +69,26 @@ def _github_request(url, timeout=12):
     return urllib.request.urlopen(request, timeout=timeout)
 
 
-def fetch_latest_release():
+def fetch_latest_release(allow_prerelease=False):
     try:
-        with _github_request(GITHUB_LATEST_API) as response:
+        with _github_request(GITHUB_LATEST_API.replace('/latest', '?per_page=100') if allow_prerelease else GITHUB_LATEST_API) as response:
             payload = json.loads(response.read().decode('utf-8'))
     except Exception as exc:
         if getattr(exc, 'code', None) == 404:
             return None
         raise
 
-    if not isinstance(payload, dict) or payload.get('draft') or payload.get('prerelease'):
+    if isinstance(payload, list):
+        candidates = []
+        for item in payload:
+            if not isinstance(item, dict) or item.get('draft') or (item.get('prerelease') and not allow_prerelease):
+                continue
+            try:
+                candidates.append((SemVer(item.get('tag_name')), item))
+            except ValueError:
+                continue
+        payload = max(candidates, key=lambda x: x[0])[1] if candidates else None
+    if not isinstance(payload, dict) or payload.get('draft') or (payload.get('prerelease') and not allow_prerelease):
         return None
 
     tag_version = str(payload.get('tag_name') or payload.get('name') or '').strip().lstrip('vV')
@@ -143,6 +110,8 @@ def fetch_latest_release():
 
     return {
         'version': version,
+        'release_tag': str(payload.get('tag_name') or ''),
+        'prerelease': bool(payload.get('prerelease')),
         'release_tag_version': tag_version,
         'html_url': str(payload.get('html_url') or ''),
         'package_name': package_name,
@@ -185,6 +154,8 @@ def launch_external_updater(release):
         f'--target-version={version}',
         f'--install-dir={install_dir}',
         '--restart',
+        f"--release-tag={release.get('release_tag') or 'v' + version}",
+        *(['--allow-prerelease'] if release.get('prerelease') else []),
     ]
 
     # Keep the helper and restarted app in the original user's session. Windows
@@ -197,9 +168,13 @@ class UpdateCheckWorker(QThread):
     completed = Signal(object)
     failed = Signal(str)
 
+    def __init__(self, parent=None, allow_prerelease=False):
+        super().__init__(parent)
+        self.allow_prerelease = bool(allow_prerelease)
+
     def run(self):
         try:
-            release = fetch_latest_release()
+            release = fetch_latest_release(self.allow_prerelease)
             if release and is_newer_version(release.get('version')):
                 self.completed.emit(release)
             else:
@@ -299,6 +274,7 @@ class AutoUpdateWindow(QMainWindow):
             return
         self.started = True
         self.close_button.setEnabled(False)
+        set_button_icon(self.close_button, 'close')
         try:
             launch_external_updater(self.release)
         except Exception as exc:

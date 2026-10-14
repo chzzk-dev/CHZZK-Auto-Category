@@ -2,6 +2,8 @@
 
 배포 저장소는 https://github.com/chzzk-dev/CHZZK-Auto-Category 입니다. `.github/workflows/windows-release.yml`을 사용합니다.
 
+현재 로컬 변경은 앱 4.12.0 / 확장프로그램 0.6.0 후보입니다. 사용자 승인 전 커밋·푸시·릴리스 게시를 진행하지 않습니다. Windows 빌드 결과는 아직 확인하지 않았습니다.
+
 ## 최초 설정
 
 저장소 **Settings → Secrets and variables → Actions → New repository secret**에서 `CHZZK_CLIENT_ID`와 `CHZZK_CLIENT_SECRET`을 각각 등록하세요. workflow는 두 값 모두 Actions Secret에서 읽습니다. Secret 값은 소스, 커밋, Markdown에 쓰지 않습니다.
@@ -10,7 +12,7 @@ Secret이 없는 일반 빌드도 테스트 및 MSI 생성은 가능합니다. �
 
 ## 새 버전 게시
 
-현재 `4.11.5`는 업데이터 복구를 위한 수동 설치용 사전 릴리스입니다. `version.py`의 `RELEASE_PRERELEASE = True`를 사용하며 Latest로 지정하지 않습니다. 기존 앱이 조회하는 `/releases/latest`에 포함되지 않으므로 자동 업데이트 오류를 다시 유발하지 않습니다. 사용자는 MSI를 한 번 직접 설치해 업데이터를 교체합니다. 이후 정식 업데이트를 배포할 때는 버전을 올리고 `RELEASE_PRERELEASE = False`로 설정하세요.
+기존 `4.11.5`는 업데이터 복구를 위한 수동 설치용 사전 릴리스입니다. `version.py`의 `RELEASE_PRERELEASE = True`를 사용하며 Latest로 지정하지 않습니다. 기존 앱이 조회하는 `/releases/latest`에 포함되지 않으므로 자동 업데이트 오류를 다시 유발하지 않습니다. 사용자는 MSI를 한 번 직접 설치해 업데이터를 교체합니다. 이후 정식 업데이트를 배포할 때는 버전을 올리고 `RELEASE_PRERELEASE = False`로 설정하세요.
 
 1. `version.py`의 `APP_VERSION`을 기존 배포보다 높은 세 자리 버전으로 수정합니다.
 2. `CHANGELOG.md`의 `## 미배포`에 사용자가 이해할 변경 사항을 적고 main에 업로드합니다.
@@ -21,6 +23,7 @@ main 업로드는 소스 버전이 모든 공개 정식 릴리스보다 높을 �
 ## 자동 처리
 
 - Python 3.13 x64 앱·업데이터 컴파일, 회귀 테스트, MSI 빌드.
+- 새 후보: 확장프로그램 모의 통신, Qt 4배율 화면 렌더링, 실제 패키징 EXE의 오프라인 UI·아이콘 검증.
 - UI와 Custom Action의 DTF 래퍼 분리 검사, 설치 상태 검사, 실제 WPF 화면 로딩 검사.
 - MSI, `SHA256SUMS.txt`, `latest.json`, `RELEASE_NOTES-버전.md`, `CHANGELOG.md` 생성.
 - 임시 릴리스에 파일을 업로드한 뒤 공개 릴리스로 전환합니다.

@@ -1,4 +1,4 @@
-APP_VERSION = '4.11.5'
+APP_VERSION = '4.12.0'
 RELEASE_PRERELEASE = True
 GITHUB_REPO = 'chzzk-dev/CHZZK-Auto-Category'
 GITHUB_RELEASES_URL = f'https://github.com/{GITHUB_REPO}/releases'

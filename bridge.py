@@ -3,6 +3,7 @@ import queue
 import threading
 import time
 import uuid
+import re
 from collections import deque
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -102,6 +103,11 @@ class LocalExtensionBridge:
         self.server = None
         self.thread = None
         self.connected_at = 0.0
+        self.extension_info = None
+        self.extension_info_at = 0.0
+        self.extension_response_at = ''
+        self.pending_ids = {}
+        self.info_sessions = {}
         self.logs = deque(maxlen=1000)
         self.log_lock = threading.Lock()
         self.log_seq = 0
@@ -109,6 +115,58 @@ class LocalExtensionBridge:
     @property
     def connected(self):
         return bool(self.connected_at and time.monotonic() - self.connected_at < 40)
+
+    def receive_extension_info(self, payload, origin_id):
+        if not isinstance(payload, dict) or payload.get('type') != 'extension_info':
+            raise ValueError('잘못된 확장 정보 메시지입니다.')
+        extension_id = str(payload.get('extensionId') or '')
+        version = str(payload.get('version') or '')
+        protocol = payload.get('protocolVersion')
+        session = str(payload.get('sessionId') or '')
+        sequence = payload.get('sequence', 0)
+        if (extension_id != origin_id or not re.fullmatch(r'[a-p]{32}', extension_id)
+                or not re.fullmatch(r'\d+\.\d+\.\d+(?:\.\d+)?', version)
+                or not isinstance(protocol, int) or isinstance(protocol, bool)
+                or not isinstance(sequence, int) or isinstance(sequence, bool) or sequence < 0
+                or len(session) > 128 or payload.get('connected') is not True):
+            raise ValueError('확장 정보의 형식이 올바르지 않습니다.')
+        with self.condition:
+            if session and sequence <= self.info_sessions.get(session, -1):
+                return False
+            if session:
+                self.info_sessions[session] = sequence
+                while len(self.info_sessions) > 32:
+                    self.info_sessions.pop(next(iter(self.info_sessions)))
+            self.extension_info = {'extensionId': extension_id, 'version': version, 'protocolVersion': protocol,
+                                   'browser': str(payload.get('browser') or '확인 불가')[:32]}
+            self.extension_info_at = time.monotonic()
+            self.extension_response_at = datetime.now().strftime('%H:%M:%S')
+        return True
+
+    def extension_status(self):
+        with self.condition:
+            info = dict(self.extension_info or {})
+            fresh = bool(self.connected and self.extension_info_at and time.monotonic() - self.extension_info_at < 70)
+            if not self.connected:
+                state = '응답 없음' if self.connected_at else '설치 확인 불가'
+                return {'state': state, 'version': None, 'compatibility': '확인 불가', 'last_response': self.extension_response_at}
+            if not fresh:
+                return {'state': '버전 확인 불가', 'version': None, 'compatibility': '확인 불가', 'last_response': self.extension_response_at}
+            compatible = info.get('protocolVersion') == 1
+            return {**info, 'state': '정상 연결' if compatible else '버전 호환 불가',
+                    'compatibility': '정상' if compatible else '프로토콜 불일치', 'last_response': self.extension_response_at}
+
+    def accept_result(self, payload):
+        command_id = str(payload.get('id') or '')
+        with self.condition:
+            deadline = self.pending_ids.get(command_id)
+            if deadline is None or deadline < time.monotonic():
+                return False
+            if command_id in self.results:
+                return False
+            self.results[command_id] = payload
+            self.condition.notify_all()
+        return True
 
     def add_log(self, message, level='info'):
         text = str(message or '').strip()
@@ -196,6 +254,7 @@ class LocalExtensionBridge:
             def _mark_extension_connected(self):
                 was_connected = bridge.connected
                 bridge.connected_at = time.monotonic()
+                bridge.extension_response_at = datetime.now().strftime('%H:%M:%S')
                 if not was_connected:
                     bridge.add_log('Chrome 확장프로그램 연결됨 · 로컬 브리지 통신 시작')
 
@@ -246,7 +305,11 @@ class LocalExtensionBridge:
 
                 if path == '/extension/poll':
                     try:
-                        command = bridge.commands.get(timeout=25)
+                        deadline = time.monotonic() + 25
+                        while True:
+                            command = bridge.commands.get(timeout=max(0, deadline - time.monotonic()))
+                            if command.get('expiresAt', 0) >= time.time() and command.get('id') in bridge.pending_ids:
+                                break
                     except queue.Empty:
                         command = None
                     self._json(200, {'ok': True, 'command': command})
@@ -263,7 +326,31 @@ class LocalExtensionBridge:
                     return
 
                 path = urlparse(self.path).path
+                if path in ('/health', '/extension/poll', '/extension/info'):
+                    try:
+                        length = int(self.headers.get('Content-Length', '0'))
+                        if not 0 < length <= 8192:
+                            raise ValueError('length')
+                        message = json.loads(self.rfile.read(length).decode('utf-8'))
+                        if not isinstance(message, dict):
+                            raise ValueError('message')
+                        if message.get('type') == 'extension_info':
+                            origin_id = self.headers.get('Origin', '').removeprefix('chrome-extension://')
+                            if not bridge.receive_extension_info(message, origin_id):
+                                self._json(409, {'ok': False, 'error': '오래된 응답입니다.'})
+                                return
+                        elif path == '/extension/info':
+                            raise ValueError('type')
+                    except (ValueError, TypeError, UnicodeError):
+                        self._json(400, {'ok': False, 'error': '확장 정보 형식이 올바르지 않습니다.'})
+                        return
+                if path not in ('/health', '/extension/poll', '/extension/info', '/extension/result'):
+                    self._json(404, {'ok': False, 'error': 'Not found'})
+                    return
                 self._mark_extension_connected()
+                if path == '/extension/info':
+                    self._json(200, {'ok': True, 'protocolVersion': 1})
+                    return
 
                 if path == '/health':
                     self._json(200, {
@@ -275,7 +362,11 @@ class LocalExtensionBridge:
 
                 if path == '/extension/poll':
                     try:
-                        command = bridge.commands.get(timeout=25)
+                        deadline = time.monotonic() + 25
+                        while True:
+                            command = bridge.commands.get(timeout=max(0, deadline - time.monotonic()))
+                            if command.get('expiresAt', 0) >= time.time() and command.get('id') in bridge.pending_ids:
+                                break
                     except queue.Empty:
                         command = None
                     self._json(200, {'ok': True, 'command': command})
@@ -297,9 +388,9 @@ class LocalExtensionBridge:
                     self._json(400, {'ok': False, 'error': '잘못된 결과 데이터입니다.'})
                     return
 
-                with bridge.condition:
-                    bridge.results[command_id] = payload
-                    bridge.condition.notify_all()
+                if not bridge.accept_result(payload):
+                    self._json(409, {'ok': False, 'error': '만료되었거나 알 수 없는 요청입니다.'})
+                    return
 
                 self._json(200, {'ok': True})
 
@@ -322,30 +413,42 @@ class LocalExtensionBridge:
             server.server_close()
         self.thread = None
 
-    def request(self, action, payload=None, timeout=20):
+    def request(self, action, payload=None, timeout=20, cancelled=lambda: False):
         if not self.server:
             raise BridgeError('로컬 Chrome 브리지가 실행 중이 아닙니다.')
         if not self.connected:
             raise BridgeError('Chrome 확장프로그램이 연결되지 않았습니다. 확장프로그램과 치지직 스튜디오 로그인을 확인해 주세요.')
 
+        if self.extension_status().get('compatibility') == '프로토콜 불일치':
+            raise BridgeError('확장프로그램 버전이 호환되지 않습니다. 확장을 업데이트해 주세요.')
+        if action not in ('settings', 'put_settings', 'search_categories', 'live_status'):
+            raise BridgeError('지원하지 않는 명령입니다.')
         command_id = uuid.uuid4().hex
         command = {
             'id': command_id,
             'action': str(action),
             'payload': payload if isinstance(payload, dict) else {},
+            'expiresAt': time.time() + max(1, float(timeout)),
         }
         self.add_log(f'Chrome 요청 전송 · {action}')
+        with self.condition:
+            self.pending_ids[command_id] = time.monotonic() + max(1, float(timeout))
         self.commands.put(command)
 
         deadline = time.monotonic() + max(1, float(timeout))
         with self.condition:
             while command_id not in self.results:
+                if cancelled():
+                    self.pending_ids.pop(command_id, None)
+                    raise BridgeError('Chrome 요청이 취소되었습니다.')
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
+                    self.pending_ids.pop(command_id, None)
                     self.add_log(f'Chrome 응답 시간 초과 · {action}', level='error')
                     raise BridgeError('Chrome 확장프로그램 응답 시간이 초과되었습니다.')
-                self.condition.wait(timeout=remaining)
+                self.condition.wait(timeout=min(remaining, 0.25))
             result = self.results.pop(command_id)
+            self.pending_ids.pop(command_id, None)
 
         if not result.get('ok'):
             message = str(result.get('error') or 'Chrome 확장프로그램 작업에 실패했습니다.')

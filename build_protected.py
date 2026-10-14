@@ -18,6 +18,7 @@ TARGETS = {
 }
 SOURCES = {name: ROOT / (name + '.py') for name in (
     'main', 'core', 'api', 'autodetect', 'bridge', 'chzzk_open', 'onboarding',
+    'network_policy', 'theme', 'app_icons', 'modern_ui', 'normalization', 'automation', 'scheduling', 'diagnostics', 'release_versions',
     'storage', 'worker', 'process_detect', 'updater', 'version', 'ui_components', 'updater_app',
 )}
 
@@ -171,6 +172,9 @@ def write_spec(target, modules, hidden, stage, work):
     validator.write_text('from pathlib import Path\n' + ast.unparse(function) + '\n', encoding='utf-8')
     spec = work / (name + '.spec')
     runtime_datas = [(str(ROOT / 'chzzk_auto_category.ico'), '.')] if target == 'app' else []
+    from PyInstaller.utils.hooks import collect_data_files
+    runtime_datas += collect_data_files('qtawesome')
+    hidden = sorted(set(hidden) | {'qtawesome', 'qtpy', 'qtpy.QtCore', 'qtpy.QtGui', 'qtpy.QtWidgets'})
     code = f'''import sys
 import json
 import os

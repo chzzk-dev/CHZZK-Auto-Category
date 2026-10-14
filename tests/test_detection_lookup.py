@@ -36,7 +36,7 @@ class DetectionLookupTests(unittest.TestCase):
             ['unknown.exe', 'CELESTE.EXE', 'celeste.exe', 'setup.exe'], entries), ['CELESTE.EXE'])
 
     def test_download_is_reduced_to_windows_executable_game_and_aliases(self):
-        payload = [{'id': 'discard-id', 'name': 'Celeste', 'aliases': ['셀레스트'],
+        payload = [{'id': 'discord-id', 'name': 'Celeste', 'aliases': ['셀레스트'],
                     'icon': 'discard-icon', 'description': 'discard-description',
                     'executables': [
                         {'os': 'win32', 'name': r'bin\Celeste.exe'},
@@ -47,7 +47,7 @@ class DetectionLookupTests(unittest.TestCase):
                         {'os': 'win32', 'name': 'arg.exe', 'arguments': '--game=celeste'},
                         {'os': 'win32', 'name': 'bootstrap.exe', 'is_launcher': True}]}]
         self.assertEqual(parse_detectable_index(payload), {
-            'celeste.exe': [{'name': 'Celeste', 'aliases': ['셀레스트']}]})
+            'celeste.exe': [{'name': 'Celeste', 'aliases': ['셀레스트'], 'id': 'discord-id'}]})
 
     def test_registration_then_saved_rule_skips_category_search(self):
         search = Mock(return_value=[CATEGORY])

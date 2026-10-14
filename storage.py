@@ -4,6 +4,9 @@ from pathlib import Path
 import sys
 import subprocess
 import base64
+import copy
+import time
+from scheduling import bounded_minutes
 import ctypes
 from ctypes import wintypes
 
@@ -23,7 +26,7 @@ DEFAULT_CONFIG = {
     'auto_rules': [],
     'auto_pending': [],
     'auto_detect': True,
-    'auto_aggressive': False,
+    'auto_aggressive': True,
     'auto_resolve_shared': False,
     'discord_refresh_hours': 24,
     'notify': True,
@@ -31,12 +34,24 @@ DEFAULT_CONFIG = {
     'start_hidden': False,
     'autostart': True,
     'auto_update': True,
-    'update_check_minutes': 5,
+    'update_check_minutes': 180,
     'update_notify': True,
     'auto_start_change': True,
     'bridge_port': 5000,
     'extension_id': WEBSTORE_EXTENSION_ID,
     'chzzk_open_enabled': True,
+    'schema_version': 2,
+    'category_sync_hours': 6,
+    'update_last_checked_at': 0,
+    'allow_prerelease': False,
+    'game_aliases': {},
+    'excluded_processes': [],
+    'preferred_process': '',
+    'only_when_live': False,
+    'league_mode': 'ask',
+    'close_to_tray': True,
+    'minimize_to_tray': True,
+    'detailed_logs': True,
 }
 
 
@@ -47,7 +62,7 @@ def data_dir():
 
 
 def normalize_config(value):
-    config = dict(DEFAULT_CONFIG)
+    config = copy.deepcopy(DEFAULT_CONFIG)
     if isinstance(value, dict):
         config.update(value)
     config['setup_completed'] = config.get('setup_completed') is True
@@ -55,7 +70,7 @@ def normalize_config(value):
     config['interval'] = max(3, min(60, int(config.get('interval', 5))))
     config['discord_refresh_hours'] = max(1, min(168, int(config.get('discord_refresh_hours', 24))))
     config['auto_detect'] = bool(config.get('auto_detect', True))
-    config['auto_aggressive'] = bool(config.get('auto_aggressive', False))
+    config['auto_aggressive'] = True  # Matching is mandatory; manual rules stay first.
     # Name-only detection cannot distinguish games sharing one executable name.
     config['auto_resolve_shared'] = False
     config['notify'] = bool(config.get('notify', True))
@@ -63,7 +78,17 @@ def normalize_config(value):
     config['start_hidden'] = bool(config.get('start_hidden', False))
     config['autostart'] = bool(config.get('autostart', True))
     config['auto_update'] = bool(config.get('auto_update', True))
-    config['update_check_minutes'] = max(5, min(360, int(config.get('update_check_minutes', 5))))
+    config['update_check_minutes'] = bounded_minutes(config.get('update_check_minutes', 180))
+    config['category_sync_hours'] = max(1, min(168, int(config.get('category_sync_hours', 6))))
+    config['schema_version'] = 2
+    for key in ('allow_prerelease', 'only_when_live', 'close_to_tray', 'minimize_to_tray', 'detailed_logs'):
+        config[key] = bool(config.get(key, DEFAULT_CONFIG[key]))
+    if not isinstance(config.get('game_aliases'), dict):
+        config['game_aliases'] = {}
+    config['game_aliases'] = {str(k): [str(a).strip() for a in v if isinstance(a, str) and a.strip()][:32]
+                              for k, v in config['game_aliases'].items() if isinstance(v, list)}
+    if not isinstance(config.get('excluded_processes'), list):
+        config['excluded_processes'] = []
     config['update_notify'] = bool(config.get('update_notify', True))
     config['auto_start_change'] = bool(config.get('auto_start_change', True))
     config['bridge_port'] = max(1024, min(65535, int(config.get('bridge_port', 5000))))
@@ -81,18 +106,32 @@ def normalize_config(value):
 def load_config():
     path = data_dir() / 'config.json'
     if not path.exists():
-        return dict(DEFAULT_CONFIG)
+        return copy.deepcopy(DEFAULT_CONFIG)
     value = json.loads(path.read_text(encoding='utf-8'))
     if not isinstance(value, dict):
         raise ValueError('설정 파일의 형식이 올바르지 않습니다.')
     if not isinstance(value.get('rules', []), list):
         raise ValueError('설정 파일의 형식이 올바르지 않습니다.')
-    return normalize_config(value)
+    normalized = normalize_config(value)
+    if value.get('schema_version') != 2:
+        backup = path.with_name('config.pre-v2.backup.json')
+        if not backup.exists():
+            # Exact bytes, before any migration writes; failure keeps original intact.
+            with backup.open('xb') as stream:
+                stream.write(path.read_bytes())
+    return normalized
 
 
 def save_config(config):
     path = data_dir() / 'config.json'
     temp = path.with_suffix('.tmp')
+    if path.exists():
+        existing = json.loads(path.read_text(encoding='utf-8'))
+        if isinstance(existing, dict) and existing.get('schema_version') != 2:
+            backup = path.with_name('config.pre-v2.backup.json')
+            if not backup.exists():
+                with backup.open('xb') as stream:
+                    stream.write(path.read_bytes())
     normalized = normalize_config(config)
     temp.write_text(json.dumps(normalized, ensure_ascii=False, indent=2), encoding='utf-8')
     temp.replace(path)

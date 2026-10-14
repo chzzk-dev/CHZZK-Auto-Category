@@ -9,6 +9,8 @@ from difflib import SequenceMatcher
 from pathlib import Path
 import requests
 from core import Rule
+from normalization import normalized_name, search_name, edition_conflict
+from automation import game_key
 
 DISCORD_DETECTABLE_URL = 'https://discord.com/api/v10/applications/detectable'
 GENERIC_EXECUTABLES = {
@@ -103,7 +105,7 @@ def with_game_client_compatibility(entries):
             record['aliases'] = list(dict.fromkeys([*LEAGUE_NAMES[1:], *record.get('aliases', [])]))[:8]
             records[i] = record
         else:
-            records.append({'name': LEAGUE_NAMES[0], 'aliases': list(LEAGUE_NAMES[1:])})
+            records.append({'name': LEAGUE_NAMES[0], 'aliases': list(LEAGUE_NAMES[1:]), '_source': 'compatibility', 'discord_name': ''})
     return result
 
 
@@ -121,7 +123,7 @@ def game_process_details(processes, entries):
 
 
 def normalize_name(value):
-    return re.sub(r'[^0-9a-z\u3131-\u318e\uac00-\ud7a3]+', '', (value or '').casefold())
+    return normalized_name(value)
 
 
 def contains_hangul(value):
@@ -156,16 +158,7 @@ def tokenize(value):
 
 
 def normalize_keyword(value):
-    text = str(value or '').strip()
-    if not text:
-        return ''
-    text = text.replace('_', ' ')
-    text = re.sub(r'[\[\]\(\){}]+', ' ', text)
-    text = re.sub(r'[:|/\\-]+', ' ', text)
-    text = re.sub(r'\s+', ' ', text).strip()
-    words = [w for w in text.split(' ') if w.casefold() not in DROP_WORDS]
-    compact = ' '.join(words).strip()
-    return compact or text
+    return search_name(value)
 
 
 def build_search_keywords(game_name, aliases, process_name=''):
@@ -252,7 +245,14 @@ def detectable_running_processes(processes, entries):
                    if any(name.casefold() == key for name in games)), None)
     games = [name for name in games
              if name.casefold() not in LEAGUE_EXECUTABLES or name.casefold() == league]
-    return sorted(games, key=str.casefold)
+    grouped = {}
+    for name in games:
+        records = entries.get(name.casefold(), [])
+        identity = str(records[0].get('id') or normalize_name(records[0].get('name'))) if len(records) == 1 else 'process:' + name.casefold()
+        previous = grouped.get(identity)
+        if previous is None or _process_preference(name, records[0].get('name', '') if records else '') > _process_preference(previous):
+            grouped[identity] = name
+    return sorted(grouped.values(), key=str.casefold)
 
 
 def parse_detectable_index(payload):
@@ -264,7 +264,7 @@ def parse_detectable_index(payload):
         if not game_name:
             continue
         aliases = [str(a).strip() for a in app.get('aliases', []) if isinstance(a, str) and a.strip()]
-        entry = {'name': game_name, 'aliases': aliases[:8]}
+        entry = {'name': game_name, 'aliases': aliases[:8], 'id': str(app.get('id') or '')}
         for exe in app.get('executables') or []:
             if not isinstance(exe, dict):
                 continue
@@ -300,6 +300,8 @@ def _candidate_identity_score(category, game_name, aliases=None, process_name=''
     executable stem before a category is eligible for automatic selection.
     """
     aliases = aliases or []
+    if edition_conflict([game_name, *aliases], category):
+        return 0
     values = [str(game_name or '').strip()]
     values.extend(str(a).strip() for a in aliases if str(a).strip())
     stem = process_basename(process_name)
@@ -659,6 +661,13 @@ class DiscordAutoMapper:
         self._last_index_error = ''
         self._compatibility_ready = False
         self._search_cache = OrderedDict()
+        self.observer = None
+        self.user_aliases = {}
+        self.category_cache = None
+        self.category_ttl = 21600
+        self.cancelled = lambda: False
+        self.last_search_error = ''
+        self._game_failures = {}
 
     def load_cache(self):
         if self._loaded:
@@ -690,7 +699,7 @@ class DiscordAutoMapper:
                 if not name:
                     continue
                 aliases = [str(a).strip() for a in item.get('aliases', []) if isinstance(a, str) and a.strip()]
-                records.append({'name': name, 'aliases': aliases[:8]})
+                records.append({'name': name, 'aliases': aliases[:8], 'id': str(item.get('id') or '')})
             if records:
                 parsed[executable.casefold()] = records
         self.entries = parsed
@@ -757,7 +766,8 @@ class DiscordAutoMapper:
             rows = search(keyword)
         except Exception as error:
             # Retain only the message, never exception tracebacks and their frames.
-            self._search_cache[key] = (time.monotonic() + 60, None, str(error))
+            delay = max(60, float(getattr(error, 'retry_after', 0) or 0))
+            self._search_cache[key] = (time.monotonic() + min(3600, delay), None, str(error))
             self._trim_search_cache()
             raise
         rows = [dict(row) for row in rows or [] if isinstance(row, dict)]
@@ -795,12 +805,17 @@ class DiscordAutoMapper:
         for keyword in keywords:
             try:
                 categories = search(keyword)
-            except Exception:
+            except Exception as error:
+                self.last_search_error = str(error)
                 continue
+            if self.cancelled():
+                return []
             options = [c for c in categories if isinstance(c, dict)
                        and c.get('categoryType') in ('GAME', 'ETC', 'SPORTS')
                        and c.get('categoryId') and c.get('categoryValue')]
             for rank, category in enumerate(options[:30]):
+                if edition_conflict([game_name, *aliases], category):
+                    continue
                 identity = _candidate_identity_score(category, game_name, aliases, process, keyword)
 
                 # Localized CHZZK categories may have a Korean display name and a categoryId
@@ -859,7 +874,26 @@ class DiscordAutoMapper:
         return ranked[:5]
 
     def _match_game(self, game, process, search):
+        game = dict(game)
+        game['aliases'] = list(dict.fromkeys([*game.get('aliases', []), *self.user_aliases.get(game.get('name', ''), [])]))
+        fingerprint = json.dumps([game.get('name'), game.get('id'), game.get('aliases')], ensure_ascii=False, sort_keys=True)
+        key = game_key(game, process)
+        self.last_search_error = ''
+        if self.observer:
+            self.observer(game, process, '분석 중')
+        if self.category_cache:
+            cached = self.category_cache.get(key, fingerprint, self.category_ttl)
+            if cached:
+                category = dict(cached['category'], _verifiedAt=cached['verified_at'])
+                if self.observer:
+                    self.observer(game, process, '검증 중')
+                return {'category': category, 'score': 600, 'confident': True, 'count': 1,
+                        'ambiguous': False, 'candidates': [category]}
+        if self.observer:
+            self.observer(game, process, '검색 중')
         ranked = self._rank_game_categories(game, process, search)
+        if self.observer:
+            self.observer(game, process, '검증 중')
         if not ranked:
             return None
 
@@ -880,7 +914,7 @@ class DiscordAutoMapper:
         ambiguous = len(korean_ranked) >= 2
 
         identity = int(top.get('identity') or top['category'].get('_identityScore') or 0)
-        confident = len(effective_ranked) == 1 and identity >= 420
+        confident = len(effective_ranked) == 1 and exact_category_identity(top['category'], [game.get('name'), *game.get('aliases', []), *self.user_aliases.get(game.get('name', ''), []), *LOCALIZED_SEARCH_OVERRIDES.get(process.casefold(), ())])
 
         # CHZZK의 localized categoryId가 Discord 영문 게임명과 직접 닮지 않는
         # 경우가 있습니다. 예: VRChat.exe / Discord 'VRChat' -> 한국어 'VR챗'.
@@ -904,6 +938,7 @@ class DiscordAutoMapper:
             and len(effective_ranked) == 1
             and len(normalized_game) >= 6
             and normalized_game == normalized_process
+            and bool(top['category'].get('_autoResolvedLocalized') or 'Studio' in str(top['category'].get('_matchSource') or ''))
         )
         if safe_single_localized:
             confident = True
@@ -929,9 +964,13 @@ class DiscordAutoMapper:
             if not basename or key in existing or is_ignored_process(basename):
                 continue
             options = self.entries.get(key, [])
+            if self.cancelled():
+                break
             if not options:
                 continue
             if len(options) > 1:
+                if self.observer:
+                    self.observer({'name': ' / '.join(o.get('name', '') for o in options[:5])}, basename, '확인 필요')
                 unresolved.append({'process': basename, 'reason': 'multi-game',
                                    'games': [o.get('name', '') for o in options[:5]]})
                 continue
@@ -943,6 +982,14 @@ class DiscordAutoMapper:
                     matches.append((game, match))
 
             if not matches:
+                game = options[0]
+                fingerprint = json.dumps([game.get('name'), game.get('id'), list(dict.fromkeys([*game.get('aliases', []), *self.user_aliases.get(game.get('name', ''), [])]))], ensure_ascii=False, sort_keys=True)
+                cached = self.category_cache.get(game_key(game, basename), fingerprint, self.category_ttl, offline=True) if self.category_cache and self.last_search_error else None
+                if cached and not self.cancelled():
+                    matches.append((game, {'category': dict(cached['category'], _verifiedAt=cached['verified_at']), 'score': 600, 'confident': True, 'count': 1, 'ambiguous': False, 'candidates': [cached['category']]}))
+            if not matches:
+                if self.observer:
+                    self.observer(options[0], basename, '오류' if self.last_search_error else '확인 필요', error=self.last_search_error)
                 unresolved.append({
                     'process': basename,
                     'reason': 'category-not-found',
@@ -990,7 +1037,15 @@ class DiscordAutoMapper:
                 })
                 continue
 
+            if self.cancelled():
+                break
             selected = selected_match['category']
+            merged_aliases = list(dict.fromkeys([*selected_game.get('aliases', []), *self.user_aliases.get(selected_game.get('name', ''), [])]))
+            fingerprint = json.dumps([selected_game.get('name'), selected_game.get('id'), merged_aliases], ensure_ascii=False, sort_keys=True)
+            if self.category_cache:
+                self.category_cache.put(game_key(selected_game, basename), fingerprint, selected, selected_game)
+            if self.observer:
+                self.observer(selected_game, basename, '연결 완료', category_id=selected['categoryId'], category_name=selected['categoryValue'], confidence_label=f"명칭/별칭 검증 완료 · 점수 {selected_match['score']}", verified_at=__import__('datetime').datetime.now().isoformat(timespec='seconds'))
             source = str(selected.get('_matchSource') or '').strip() or 'Discord 자동 감지'
             game_name = str(selected_game.get('name') or selected.get('_discordName') or '').strip()
             rule = Rule(
@@ -1001,7 +1056,11 @@ class DiscordAutoMapper:
                 game_name,
                 source,
             )
-            aliases = tuple(p for p in league_rule_processes(rule)
+            related_processes = [p for p in processes
+                                 if len(self.entries.get(p.casefold(), [])) == 1
+                                 and str(self.entries[p.casefold()][0].get('id') or normalize_name(self.entries[p.casefold()][0].get('name')))
+                                 == str(selected_game.get('id') or normalize_name(game_name))]
+            aliases = tuple(p for p in dict.fromkeys([*league_rule_processes(rule), *related_processes])
                             if p.casefold() != key and p.casefold() not in existing
                             and len(self.entries.get(p.casefold(), [])) == 1
                             and normalize_name(self.entries[p.casefold()][0].get('name', ''))

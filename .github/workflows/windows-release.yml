@@ -114,6 +114,26 @@ jobs:
           CHZZK_CLIENT_ID: ${{ secrets.CHZZK_CLIENT_ID }}
           CHZZK_CLIENT_SECRET: ${{ secrets.CHZZK_CLIENT_SECRET }}
         run: build.bat
+      - name: Check extension bridge JavaScript
+        run: |
+          node --check extension/background.js
+          if ($LASTEXITCODE -ne 0) { throw 'Extension syntax validation failed.' }
+          node tests/extension_bridge.test.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Extension mocked integration tests failed.' }
+      - name: Render desktop pages at four Qt DPI scales
+        run: |
+          foreach ($scale in @('1', '1.25', '1.5', '2')) {
+            $env:QT_SCALE_FACTOR = $scale
+            .venv/Scripts/python.exe scripts/ui_smoke.py
+            if ($LASTEXITCODE -ne 0) { throw "Qt layout verification failed at scale $scale." }
+          }
+          Remove-Item Env:QT_SCALE_FACTOR
+      - name: Run the actual frozen EXE and bundled offline icons
+        run: |
+          $output = Join-Path $PWD 'build/packaged-ui-smoke'
+          $process = Start-Process 'dist/ChzzkAutoCategory/ChzzkAutoCategory.exe' -ArgumentList "--ui-smoke-output=`"$output`"" -PassThru
+          if (-not $process.WaitForExit(60000)) { $process.Kill(); throw 'Frozen Qt app did not complete its smoke test.' }
+          if ($process.ExitCode -ne 0 -or -not (Test-Path "$output/packaged-checks.json")) { throw 'Frozen Qt app or bundled icon fonts failed.' }
       - name: Compile protected updater
         shell: cmd
         run: build_updater.bat

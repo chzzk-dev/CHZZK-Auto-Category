@@ -1,5 +1,7 @@
 import os
 import requests
+import time
+from network_policy import retry_seconds
 
 OPEN_API_BASE = 'https://openapi.chzzk.naver.com'
 APP_CLIENT_ID = os.environ.get('CHZZK_CLIENT_ID', '')
@@ -7,7 +9,10 @@ APP_CLIENT_SECRET = os.environ.get('CHZZK_CLIENT_SECRET', '')
 
 
 class ChzzkOpenAPIError(RuntimeError):
-    pass
+    def __init__(self, message, auth=False, retry_after=0):
+        super().__init__(message)
+        self.auth = auth
+        self.retry_after = retry_after
 
 
 class ChzzkOpenAPI:
@@ -20,6 +25,7 @@ class ChzzkOpenAPI:
     def __init__(self, client_id=APP_CLIENT_ID, client_secret=APP_CLIENT_SECRET):
         self.client_id = str(client_id or '').strip()
         self.client_secret = str(client_secret or '').strip()
+        self.retry_at = 0.0
         self.session = requests.Session()
         self.session.headers.update({
             'Accept': 'application/json',
@@ -40,6 +46,8 @@ class ChzzkOpenAPI:
             return []
         if not self.configured:
             return []
+        if time.monotonic() < self.retry_at:
+            raise ChzzkOpenAPIError('공식 API 재연결 대기 중입니다.', retry_after=max(1, int(self.retry_at - time.monotonic())))
 
         try:
             response = self.session.get(
@@ -54,10 +62,13 @@ class ChzzkOpenAPI:
         except requests.RequestException as e:
             raise ChzzkOpenAPIError('CHZZK 공식 Open API에 연결할 수 없습니다.') from e
 
-        if response.status_code == 401:
-            raise ChzzkOpenAPIError('CHZZK 공식 API Client ID 또는 Client Secret이 올바르지 않습니다.')
+        if response.status_code in (401, 403):
+            self.retry_at = time.monotonic() + 300
+            raise ChzzkOpenAPIError('CHZZK 공식 API 인증 정보를 확인해 주세요.', auth=True, retry_after=300)
         if response.status_code == 429:
-            raise ChzzkOpenAPIError('CHZZK 공식 API 요청 제한에 도달했습니다.')
+            delay = retry_seconds(response.headers.get('Retry-After'))
+            self.retry_at = time.monotonic() + delay
+            raise ChzzkOpenAPIError('CHZZK 공식 API 요청 제한에 도달했습니다.', retry_after=delay)
         if not 200 <= response.status_code < 300:
             raise ChzzkOpenAPIError(f'CHZZK 공식 API HTTP {response.status_code} 오류입니다.')
 
@@ -67,8 +78,7 @@ class ChzzkOpenAPI:
             raise ChzzkOpenAPIError('CHZZK 공식 API가 JSON이 아닌 응답을 반환했습니다.') from e
 
         if not isinstance(body, dict) or str(body.get('code')) != '200':
-            message = body.get('message') if isinstance(body, dict) else None
-            raise ChzzkOpenAPIError(str(message or 'CHZZK 공식 API 응답이 올바르지 않습니다.'))
+            raise ChzzkOpenAPIError('CHZZK 공식 API 응답이 올바르지 않습니다.')
 
         content = body.get('content')
         rows = content.get('data') if isinstance(content, dict) else None

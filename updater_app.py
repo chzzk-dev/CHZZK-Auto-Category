@@ -13,8 +13,9 @@ import sys
 import tempfile
 import time
 import urllib.request
+import urllib.parse
 
-from PySide6.QtCore import QAbstractAnimation, QEasingCurve, QPoint, QPropertyAnimation, QThread, QTimer, Qt, Signal
+from PySide6.QtCore import QLockFile, QAbstractAnimation, QEasingCurve, QPoint, QPropertyAnimation, QThread, QTimer, Qt, Signal
 from PySide6.QtGui import QColor, QMouseEvent
 from PySide6.QtWidgets import (
     QApplication,
@@ -156,11 +157,16 @@ def _asset(release, name):
     return None
 
 
-def _latest_release(target_version=''):
-    with _request(GITHUB_LATEST_API, timeout=15) as response:
+def _latest_release(target_version='', release_tag='', allow_prerelease=False):
+    url = GITHUB_LATEST_API
+    if release_tag:
+        if not re.fullmatch(r'[vV]?\d+\.\d+\.\d+', release_tag):
+            raise RuntimeError('업데이트 릴리스 태그 형식이 올바르지 않습니다.')
+        url = GITHUB_LATEST_API.rsplit('/', 1)[0] + '/tags/' + urllib.parse.quote(release_tag, safe='')
+    with _request(url, timeout=15) as response:
         release = json.loads(response.read().decode('utf-8'))
 
-    if not isinstance(release, dict) or release.get('draft') or release.get('prerelease'):
+    if not isinstance(release, dict) or release.get('draft') or (release.get('prerelease') and not allow_prerelease):
         raise RuntimeError('사용할 수 있는 정식 GitHub Release가 없습니다.')
 
     version = str(release.get('tag_name') or '').strip().lstrip('vV')
@@ -327,6 +333,8 @@ class UpdateWorker(QThread):
         self.install_dir = Path(install_dir)
         self.restart = bool(restart)
         self.reboot_required = False
+        self.release_tag = ''
+        self.allow_prerelease = False
 
     def run(self):
         temp_root = Path(tempfile.mkdtemp(prefix='chzzk-auto-update-'))
@@ -343,7 +351,7 @@ class UpdateWorker(QThread):
             self.progress.emit(8)
             self.status.emit('GitHub 패치 확인 중')
             self.detail.emit('최신 GitHub Release 패키지를 확인하고 있습니다.')
-            info = _latest_release(self.target_version)
+            info = _latest_release(self.target_version, self.release_tag, self.allow_prerelease)
             self.version.emit(info['version'])
 
             package = temp_root / info['package_name']
@@ -449,10 +457,11 @@ class _FramelessTitleBar(QFrame):
 
 
 class UpdaterWindow(QMainWindow):
-    def __init__(self, parent_pid, target_version, install_dir, restart=True):
+    def __init__(self, parent_pid, target_version, install_dir, restart=True, release_tag='', allow_prerelease=False):
         super().__init__()
         self.restart = bool(restart)
         self.exe_path = ''
+        self.previous_exe_path = str(Path(install_dir) / APP_EXE_NAME)
         self.dot_count = 0
         self.status_base = '업데이트 준비 중'
         self._shadow = None
@@ -661,6 +670,8 @@ class UpdaterWindow(QMainWindow):
         self.anim.start()
 
         self.worker = UpdateWorker(parent_pid, target_version, install_dir, restart, self)
+        self.worker.release_tag = release_tag
+        self.worker.allow_prerelease = bool(allow_prerelease)
         self.worker.progress.connect(self.set_progress)
         self.worker.status.connect(self.set_status)
         self.worker.detail.connect(self.detail_label.setText)
@@ -736,6 +747,11 @@ class UpdaterWindow(QMainWindow):
             self._pulse_anim.stop()
             self.activity_dot.setStyleSheet('color: #ff6d83; font-size: 15px;')
         self.close_button.setEnabled(True)
+        if Path(self.previous_exe_path).is_file():
+            self.exe_path = self.previous_exe_path
+            self.launch_button.setText('기존 프로그램 다시 실행')
+            self.launch_button.setEnabled(True)
+            self.detail_label.setText(str(error) + '\n기존 설치 파일이 있으면 다시 실행할 수 있습니다. MSI 트랜잭션 실패 시 Windows Installer가 롤백합니다.')
 
     def launch_app(self):
         if not self.exe_path:
@@ -763,15 +779,24 @@ def main():
     parser.add_argument('--target-version', default='')
     parser.add_argument('--install-dir', default='')
     parser.add_argument('--restart', action='store_true')
+    parser.add_argument('--release-tag', default='')
+    parser.add_argument('--allow-prerelease', action='store_true')
     args, _unknown = parser.parse_known_args()
 
     default_dir = Path(os.environ.get('ProgramFiles', r'C:\Program Files')) / 'CHZZK Auto Category'
     install_dir = Path(args.install_dir).resolve() if args.install_dir else default_dir
 
     app = QApplication(sys.argv)
-    window = UpdaterWindow(args.parent_pid, args.target_version, install_dir, args.restart)
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    update_lock = QLockFile(str(CONFIG_DIR / 'update.lock'))
+    if not update_lock.tryLock(100):
+        show_info(None, '업데이트 진행 중', '이미 업데이트 프로그램이 실행 중입니다. 기존 업데이트 창을 확인해 주세요.')
+        return 0
+    window = UpdaterWindow(args.parent_pid, args.target_version, install_dir, args.restart, args.release_tag, args.allow_prerelease)
     window.show()
-    return app.exec()
+    result = app.exec()
+    update_lock.unlock()
+    return result
 
 
 if __name__ == '__main__':

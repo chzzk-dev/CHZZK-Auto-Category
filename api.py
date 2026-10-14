@@ -1,4 +1,8 @@
 import copy
+import json
+from pathlib import Path
+from storage import chzzk_catalog_cache_file
+from network_policy import retry_seconds
 import re
 import time
 from difflib import SequenceMatcher
@@ -10,7 +14,7 @@ from bridge import BridgeError
 
 BASE = 'https://api.chzzk.naver.com'
 PUBLIC_CATEGORIES_URL = 'https://chzzk.dico.page/api/categories'
-CATEGORY_CATALOG_TTL = 30 * 60
+CATEGORY_CATALOG_TTL = 6 * 60 * 60
 UNOFFICIAL_CATEGORIES_PATH = '/service/v1/categories/live'
 SETTINGS_PATH = '/manage/v1/channels/{channel}/live-setting/normal'
 FIELDS = ('defaultLiveTitle', 'defaultThumbnailImageUrl', 'dropsCampaignNo',
@@ -76,6 +80,7 @@ class ChzzkAPI:
     def __init__(self, channel, bridge):
         self.channel = channel_id(channel)
         self.bridge = bridge
+        self.cancelled = lambda: False
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0',
@@ -89,6 +94,15 @@ class ChzzkAPI:
         self._category_catalog = []
         self._category_catalog_at = 0.0
         self._category_catalog_source = ''
+        self.category_ttl = CATEGORY_CATALOG_TTL
+        self.catalog_retry_at = 0.0
+        try:
+            saved = json.loads(chzzk_catalog_cache_file().read_text(encoding='utf-8'))
+            self._category_catalog = self._normalize_category_rows(saved.get('data', []), saved.get('source', '검증된 로컬 캐시'))
+            self._category_catalog_at = float(saved.get('updated_at', 0))
+            self._category_catalog_source = str(saved.get('source') or '검증된 로컬 캐시')
+        except (OSError, ValueError, AttributeError, TypeError):
+            pass
 
     def close(self):
         self.session.close()
@@ -97,9 +111,9 @@ class ChzzkAPI:
         if self.bridge is None:
             raise APIError('Chrome 확장프로그램 브리지가 준비되지 않았습니다.', auth=True)
         try:
-            response = self.bridge.request(action, payload, timeout=20)
+            response = self.bridge.request(action, payload, timeout=20, cancelled=self.cancelled)
         except BridgeError as e:
-            raise APIError(str(e), auth=True) from None
+            raise APIError(str(e), auth='취소' not in str(e)) from None
 
         if not isinstance(response, dict):
             raise APIError(f'Chrome 확장프로그램 응답 형식이 올바르지 않습니다. {context}')
@@ -113,7 +127,7 @@ class ChzzkAPI:
                 auth=True,
             )
         if status == 429:
-            raise APIError(f'HTTP 429 {context}. 요청 제한으로 잠시 대기합니다.', retry_after=60)
+            raise APIError(f'HTTP 429 {context}. 요청 제한으로 잠시 대기합니다.', retry_after=retry_seconds(response.get('retryAfter')))
         if not 200 <= status < 300:
             hint = ' 채널 ID와 치지직 스튜디오 상태를 확인해 주세요.' if status == 404 else ''
             raise APIError(f'HTTP {status} {context}.{hint}', permanent=400 <= status < 500)
@@ -139,7 +153,7 @@ class ChzzkAPI:
         return value
 
     @staticmethod
-    def _normalize_category_rows(rows, source):
+    def _normalize_category_rows(rows, source, game_only=True):
         categories = []
         seen = set()
         for row in rows if isinstance(rows, list) else []:
@@ -150,7 +164,7 @@ class ChzzkAPI:
             category_value = str(row.get('categoryValue') or '').strip()
             if not category_id or not category_type or not category_value:
                 continue
-            if category_type != 'GAME':
+            if category_type not in ('GAME', 'ETC', 'SPORTS') or game_only and category_type != 'GAME':
                 continue
             key = (category_type, category_id)
             if key in seen:
@@ -173,9 +187,13 @@ class ChzzkAPI:
         seen_cursors = set()
 
         for _page in range(120):
+            if self.cancelled():
+                raise APIError('카테고리 검색이 취소되었습니다.')
             try:
                 response = self.session.get(BASE + UNOFFICIAL_CATEGORIES_PATH,
                                             params=params, timeout=(5, 10))
+                if response.status_code == 429:
+                    raise APIError('카테고리 API 요청 제한으로 대기합니다.', retry_after=retry_seconds(response.headers.get('Retry-After')))
                 response.raise_for_status()
                 body = response.json()
             except requests.RequestException as e:
@@ -227,9 +245,13 @@ class ChzzkAPI:
 
     def load_category_catalog(self, force=False):
         if (not force and self._category_catalog and
-                time.time() - self._category_catalog_at < CATEGORY_CATALOG_TTL):
+                time.time() - self._category_catalog_at < self.category_ttl):
             return list(self._category_catalog)
 
+        if not force and time.monotonic() < self.catalog_retry_at:
+            if self._category_catalog:
+                return list(self._category_catalog)
+            raise APIError('카테고리 서버 재연결 대기 중입니다.', retry_after=60)
         error = None
         try:
             categories = self._load_unofficial_chzzk_catalog()
@@ -240,13 +262,22 @@ class ChzzkAPI:
                 categories = self._load_dico_catalog_fallback()
                 source = 'Dico 카탈로그 폴백'
             except APIError:
-                if self._category_catalog:
+                self.catalog_retry_at = time.monotonic() + max(60, e.retry_after)
+                if self._category_catalog and time.time() - self._category_catalog_at <= 7*86400:
                     return list(self._category_catalog)
                 raise error
 
         self._category_catalog = categories
         self._category_catalog_at = time.time()
         self._category_catalog_source = source
+        self.catalog_retry_at = 0
+        try:
+            cache = chzzk_catalog_cache_file()
+            temp = cache.with_suffix('.tmp')
+            temp.write_text(json.dumps({'updated_at': self._category_catalog_at, 'source': source, 'data': categories}, ensure_ascii=False), encoding='utf-8')
+            temp.replace(cache)
+        except OSError:
+            pass
         return list(categories)
 
     def search_catalog(self, keyword, limit=30, extra_score=0):
@@ -298,6 +329,7 @@ class ChzzkAPI:
             item = dict(category)
             item.update({
                 '_smartScore': score,
+                '_verifiedAt': self._category_catalog_at,
                 '_matchSource': category.get('_catalogSource') or 'CHZZK 비공식 API',
                 '_matchedKeyword': query,
                 '_koreanCandidate': value if contains_hangul(value) else '',
@@ -370,6 +402,8 @@ class ChzzkAPI:
         tried = set()
         checked = 0
         for candidate in candidates:
+            if self.cancelled():
+                return
             korean = str(candidate.get('_koreanCandidate') or candidate.get('categoryValue') or '').strip()
             if not contains_hangul(korean):
                 continue
@@ -428,6 +462,20 @@ class ChzzkAPI:
 
         merged = {}
         errors = []
+        # Prefer a small authenticated search. No whole-catalogue download for a new game.
+        if official is not None and getattr(official, 'configured', False):
+            try:
+                official_rows = official.search_categories(query, limit=min(50, max(20, limit)))
+                valid = self._normalize_category_rows(official_rows, 'CHZZK 공식 Open API', game_only=False)
+                if valid:
+                    for rank, row in enumerate(valid):
+                        row['_verifiedAt'] = time.time()
+                        row['_matchSource'] = 'CHZZK 공식 Open API'
+                        row['_matchedKeyword'] = query
+                        row['_smartScore'] = self._score_official_row(row, query, rank)
+                    return valid[:limit]
+            except Exception:
+                errors.append('공식 API 검색 실패')
         successful_queries = 0
 
         # 1) Unofficial public CHZZK category catalogue. This is especially useful when
@@ -440,29 +488,6 @@ class ChzzkAPI:
         except APIError:
             errors.append('공개 카테고리 목록 연결 실패')
             catalog_rows = []
-
-        # 2) Official Open API category search, when the user configured client auth.
-        if official is not None and getattr(official, 'configured', False):
-            try:
-                official_rows = official.search_categories(query, limit=min(50, max(20, limit)))
-                successful_queries += 1
-            except Exception:
-                errors.append('공식 API 검색 실패')
-                official_rows = []
-            for rank, row in enumerate(official_rows):
-                if str(row.get('categoryType') or '') != 'GAME':
-                    continue
-                score = self._score_official_row(row, query, rank)
-                row = dict(row)
-                row['_smartScore'] = score
-                self._merge_results(
-                    merged,
-                    [row],
-                    source='CHZZK 공식 Open API',
-                    matched_keyword=query,
-                    korean_name=str(row.get('categoryValue') or '') if contains_hangul(row.get('categoryValue')) else '',
-                    discord_name=query,
-                )
 
         # 3) Final Korean candidate verification with the Studio internal autocomplete.
         # This is where we obey CHZZK Studio's Korean-search behavior: English is never
@@ -510,6 +535,24 @@ class ChzzkAPI:
 
     def search(self, keyword, official=None):
         return self.search_smart(keyword, official=official, limit=30)
+
+    def validate_category(self, rule, official=None):
+        rows = self.search(rule.category_name, official)
+        found = next((row for row in rows if (row.get('categoryType'), row.get('categoryId')) == rule.key), None)
+        if found or rule.category_type == 'GAME':
+            return found
+        # Preserve manual ETC/SPORTS rules: use the same authenticated Studio autocomplete.
+        content = self.bridge_request('search_categories', {'channel': self.channel, 'keyword': rule.category_name},
+                                      '[수동 카테고리 검증]')
+        rows = content.get('results', []) if isinstance(content, dict) else []
+        return next((row for row in rows if isinstance(row, dict) and
+                     (row.get('categoryType'), row.get('categoryId')) == rule.key and row.get('categoryValue')), None)
+
+    def is_live(self):
+        value = self.bridge_request('live_status', {'channel': self.channel}, '[방송 상태 확인]')
+        if not isinstance(value, dict) or value.get('status') not in ('OPEN', 'CLOSE'):
+            raise APIError('방송 상태를 확인할 수 없어 카테고리 변경을 보류합니다.')
+        return value['status'] == 'OPEN'
 
     def apply(self, rule, cancelled=lambda: False):
         current = self.settings()

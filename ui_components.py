@@ -13,15 +13,17 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-ACCENT = '#25d39c'
-ACCENT_HOVER = '#35e1aa'
-SURFACE = '#11141b'
-CARD = '#151922'
-BORDER = '#27303d'
-TEXT = '#f5f7fb'
-MUTED = '#98a4b5'
-WARNING = '#f2c866'
-DANGER = '#ff6d83'
+from theme import TOKENS
+from app_icons import app_icon
+ACCENT = TOKENS['accent']
+ACCENT_HOVER = TOKENS['hover']
+SURFACE = TOKENS['background']
+CARD = TOKENS['card']
+BORDER = TOKENS['border']
+TEXT = TOKENS['text']
+MUTED = TOKENS['muted']
+WARNING = '#FFF4DD'
+DANGER = '#B94A59'
 
 _DIALOG_STYLE = f'''
 QDialog {{ background: transparent; }}
@@ -30,23 +32,23 @@ QFrame#dialogShell {{
     border: 1px solid {BORDER};
     border-radius: 22px;
 }}
-QFrame#dialogIconInfo {{ background: #17362e; border: 1px solid #2b6b56; border-radius: 20px; }}
-QFrame#dialogIconWarning {{ background: #362e19; border: 1px solid #6c5a2d; border-radius: 20px; }}
-QFrame#dialogIconError {{ background: #391d25; border: 1px solid #74404d; border-radius: 20px; }}
-QFrame#dialogIconQuestion {{ background: #17362e; border: 1px solid #2b6b56; border-radius: 20px; }}
+QFrame#dialogIconInfo {{ background: #E4F8F0; border: 1px solid #C4E8DC; border-radius: 20px; }}
+QFrame#dialogIconWarning {{ background: #FFF4DD; border: 1px solid #EAD8B4; border-radius: 20px; }}
+QFrame#dialogIconError {{ background: #FCECF0; border: 1px solid #EBCBD1; border-radius: 20px; }}
+QFrame#dialogIconQuestion {{ background: #E4F8F0; border: 1px solid #C4E8DC; border-radius: 20px; }}
 QLabel#dialogGlyph {{ color: {TEXT}; font-size: 18px; font-weight: 900; }}
 QLabel#dialogTitle {{ color: {TEXT}; font-size: 19px; font-weight: 850; }}
-QLabel#dialogMessage {{ color: #b7c0ce; font-size: 13px; line-height: 1.5; }}
+QLabel#dialogMessage {{ color: #6D8490; font-size: 13px; line-height: 1.5; }}
 QPushButton {{
     min-height: 42px;
     border-radius: 13px;
     padding: 0 18px;
-    background: #181d27;
-    border: 1px solid #2d3644;
+    background: #FFFFFF;
+    border: 1px solid #E3EBEE;
     color: {TEXT};
     font-weight: 700;
 }}
-QPushButton:hover {{ background: #202733; border-color: #3c4758; }}
+QPushButton:hover {{ background: #EDF9F4; border-color: #A8D9CF; }}
 QPushButton#dialogPrimary {{ background: {ACCENT}; color: #071911; border: none; }}
 QPushButton#dialogPrimary:hover {{ background: {ACCENT_HOVER}; }}
 QPushButton#dialogDanger {{ background: {DANGER}; color: #1f0710; border: none; }}
@@ -56,7 +58,7 @@ QPushButton#dialogClose {{
     border-radius: 9px; padding: 0; background: transparent; border: 1px solid transparent;
     color: #8f9aac;
 }}
-QPushButton#dialogClose:hover {{ background: #202631; border-color: #303947; color: #ffffff; }}
+QPushButton#dialogClose:hover {{ background: #EDF9F4; border-color: #E3EBEE; color: #17313C; }}
 '''
 
 
@@ -110,11 +112,8 @@ class AppDialog(QDialog):
         }.get(tone, 'dialogIconInfo'))
         icon_layout = QVBoxLayout(icon_frame)
         icon_layout.setContentsMargins(0, 0, 0, 0)
-        glyph = QLabel({
-            'warning': '!',
-            'error': '×',
-            'question': '?',
-        }.get(tone, 'i'))
+        glyph = QLabel()
+        glyph.setPixmap(app_icon('warning' if tone in ('warning', 'error') else 'info').pixmap(20, 20))
         glyph.setObjectName('dialogGlyph')
         glyph.setAlignment(Qt.AlignmentFlag.AlignCenter)
         icon_layout.addWidget(glyph)
@@ -133,7 +132,9 @@ class AppDialog(QDialog):
         titles.addWidget(message_label)
         header.addLayout(titles, 1)
 
-        close_button = QPushButton('✕')
+        close_button = QPushButton('')
+        close_button.setIcon(app_icon('close'))
+        close_button.setAccessibleName('닫기')
         close_button.setObjectName('dialogClose')
         close_button.clicked.connect(self.reject)
         header.addWidget(close_button, 0, Qt.AlignmentFlag.AlignTop)

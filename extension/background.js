@@ -3,6 +3,14 @@ const STUDIO_URL = 'https://studio.chzzk.naver.com/';
 const DOWNLOAD_PAGE = 'https://chzzk.dico.page/download/?from=extension&package=msi';
 const KEEPALIVE_ALARM = 'chzzk-bridge-keepalive';
 const EXTENSION_ID = chrome.runtime.id;
+const BRIDGE_SESSION = crypto.randomUUID();
+let infoSequence = 0;
+
+function extensionInfo() {
+  return { type: 'extension_info', extensionId: EXTENSION_ID, version: chrome.runtime.getManifest().version,
+    protocolVersion: 1, browser: navigator.userAgent.includes('Edg/') ? 'Edge' : 'Chrome', connected: true,
+    sessionId: BRIDGE_SESSION, sequence: ++infoSequence };
+}
 
 let loopRunning = false;
 let lastBridgeOk = false;
@@ -67,7 +75,10 @@ async function executeCommand(command) {
       let path = '';
       let body;
 
-      if (cmd.action === 'settings') {
+      if (cmd.expiresAt && Date.now() / 1000 > cmd.expiresAt) throw new Error('만료된 요청입니다.');
+      if (cmd.action === 'live_status') {
+        path = `/service/v2/channels/${channel}/live-detail`;
+      } else if (cmd.action === 'settings') {
         path = `/manage/v1/channels/${channel}/live-setting/normal`;
       } else if (cmd.action === 'put_settings') {
         method = 'PUT';
@@ -87,6 +98,7 @@ async function executeCommand(command) {
       const response = await fetch(API_BASE + path, {
         method,
         credentials: 'include',
+        signal: AbortSignal.timeout(15000),
         headers: {
           Accept: 'application/json',
           ...(body ? { 'Content-Type': 'application/json' } : {})
@@ -106,7 +118,8 @@ async function executeCommand(command) {
 
       return {
         status: response.status,
-        body: responseBody
+        body: responseBody,
+        retryAfter: response.headers.get('Retry-After')
       };
     }
   });
@@ -124,6 +137,7 @@ async function postResult(command, ok, result = null, error = '') {
       'Content-Type': 'application/json',
       'X-Extension-Id': EXTENSION_ID
     },
+    signal: AbortSignal.timeout(10000),
     body: JSON.stringify({
       id: command.id,
       ok,
@@ -140,6 +154,7 @@ async function postResult(command, ok, result = null, error = '') {
 async function bridgeLoop() {
   if (loopRunning) return;
   loopRunning = true;
+  let failures = 0;
 
   try {
     while (true) {
@@ -153,7 +168,8 @@ async function bridgeLoop() {
             'Content-Type': 'application/json',
             'X-Extension-Id': EXTENSION_ID
           },
-          body: '{}'
+          body: JSON.stringify(extensionInfo()),
+          signal: AbortSignal.timeout(30000)
         });
 
         if (!response.ok) {
@@ -161,6 +177,7 @@ async function bridgeLoop() {
         }
 
         setBridgeState(true);
+        failures = 0;
         const data = await response.json();
         const command = data.command;
 
@@ -174,7 +191,9 @@ async function bridgeLoop() {
         }
       } catch (error) {
         setBridgeState(false, error?.message || error);
-        await sleep(1500);
+        failures++;
+        if (failures >= 5) break; // Next Chrome alarm starts a new bounded reconnect batch.
+        await sleep(Math.min(60000, 1500 * 2 ** (failures - 1)));
       }
     }
   } finally {
@@ -219,7 +238,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message?.type === 'bridge-kick') {
-    setBridgeState(true);
+    // A reconnect request is not evidence of a successful connection.
     bridgeLoop();
     sendResponse({ ok: true });
     return false;

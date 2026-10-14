@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CHZZK : 자동 카테고리 연결 커넥터",
-  "version": "0.5.3",
+  "version": "0.6.0",
   "description": "CHZZK Auto Category 앱과 치지직 스튜디오의 게임 카테고리 변경을 자동으로 연결해주는 커넥터입니다.",
   "permissions": [
     "scripting",

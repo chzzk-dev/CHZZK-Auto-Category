@@ -8,7 +8,10 @@ from autodetect import (DiscordAutoMapper, serialize_rules, cleanup_auto_mapping
                         is_ignored_process, detectable_running_processes, game_process_details,
                         category_choice_process_key, league_rule_processes)
 from process_detect import process_names as snapshot_process_names
-from storage import discord_cache_file
+from storage import discord_cache_file, data_dir
+from automation import MatchingPipeline, VerifiedCache, choose_representative
+from datetime import datetime
+from dataclasses import asdict
 from chzzk_open import ChzzkOpenAPI, ChzzkOpenAPIError
 
 
@@ -37,12 +40,19 @@ class Worker(QThread):
         self.gate = Gate()
         self.last_status = None
         self.processes = []
+        self.pipeline = MatchingPipeline(self.emit, VerifiedCache(discord_cache_file().parent / 'verified_categories.json'))
+        self.verified_rules = {}
+        self.validation_retry = {}
+        self.last_catalog_sync = 0.0
+        self.latest_snapshot = None
+        self.snapshot_thread = None
         self.mapper = DiscordAutoMapper(
             discord_cache_file(),
             int(self.config.get('discord_refresh_hours', 24)) * 3600,
             aggressive_resolve=self.config.get('auto_aggressive', True),
             resolve_shared_executable=self.config.get('auto_resolve_shared', False),
         )
+        self.configure_mapper()
         self.chzzk_open = self.build_chzzk_open_client()
         self.last_auto_sync = 0.0
         self.last_cookie_refresh = 0.0
@@ -51,6 +61,121 @@ class Worker(QThread):
         self.category_choice_waiting = set()
         self.category_choice_dismissed = set()
         self.sanitize_auto_state(emit=False)
+
+    def configure_mapper(self):
+        self.mapper.aggressive_resolve = True
+        self.mapper.user_aliases = self.config.get('game_aliases', {})
+        self.mapper.category_cache = self.pipeline.cache
+        self.mapper.category_ttl = max(1, int(self.config.get('category_sync_hours', 6))) * 3600
+        self.mapper.cancelled = self.cancel.is_set
+        self.mapper.observer = self.observe_matching
+
+    def observe_matching(self, game, process, stage, **fields):
+        # Observe per-game state; no search results are shared across game identities.
+        old = self.pipeline.states.get(str(game.get('id') or __import__('normalization').normalized_name(game.get('name')) or process.casefold()))
+        previous = old.stage if old else None
+        self.pipeline.transition(game, process, stage, **fields)
+        if stage != previous:
+            self.emit('log', text=f"[카테고리 검색] {game.get('name') or process} · {process} · {stage}")
+
+    def rule_game(self, rule):
+        records = self.mapper.entries.get(rule.process.casefold(), [])
+        game = dict(records[0]) if len(records) == 1 else {'name': rule.game_name or rule.process, 'discord_name': ''}
+        if rule.category_id.casefold() in ('teamfight_tactics', 'teamfighttactics'):
+            game = {'name': 'Teamfight Tactics', 'discord_name': str(game.get('discord_name', game.get('name', '')))}  # Explicit stored category, not process inference.
+        game['processes'] = rule.processes
+        return game
+
+    def validate_rule(self, rule, force=False):
+        key = '|'.join((category_choice_process_key(rule.process), rule.category_type, rule.category_id))
+        aliases = self.config.get('game_aliases', {}).get(rule.game_name, [])
+        fingerprint = '|'.join([rule.category_id, rule.category_name, *aliases])
+        ttl = max(1, int(self.config.get('category_sync_hours', 6))) * 3600
+        cached = self.pipeline.cache.get('rule:' + key, fingerprint, ttl)
+        if cached and not force:
+            return True
+        if not force and time.monotonic() < self.validation_retry.get(key, 0):
+            return False
+        game = self.rule_game(rule)
+        self.pipeline.transition(game, rule.process, '검증 중')
+        try:
+            rows = self.client().search(rule.category_name, self.chzzk_open)
+            valid = next((r for r in rows if r.get('categoryId') == rule.category_id
+                          and r.get('categoryType') == rule.category_type and r.get('categoryValue')), None)
+            if valid is None and rule.category_type != 'GAME':
+                valid = self.client().validate_category(rule, self.chzzk_open)
+            if valid is None:
+                self.validation_retry[key] = time.monotonic() + 300
+                self.pipeline.transition(game, rule.process, '확인 필요', error='저장된 카테고리를 검색 결과에서 확인하지 못했습니다.')
+                return False
+            self.pipeline.cache.put('rule:' + key, fingerprint, valid, game)
+            return True
+        except Exception as error:
+            self.validation_retry[key] = time.monotonic() + max(60, float(getattr(error, 'retry_after', 0) or 0))
+            if self.pipeline.cache.get('rule:' + key, fingerprint, ttl, offline=True):
+                self.emit('log', text=f'[자동 매칭] {rule.process} · 이전에 검증된 오프라인 연결 재사용')
+                return True
+            self.pipeline.transition(game, rule.process, '오류', error='카테고리 검증에 연결하지 못했습니다.')
+            self.emit('log', text=f'[카테고리 검색] {rule.process} 검증 실패 · {error}')
+            return False
+
+    def sync_category_data(self, force=False):
+        now = time.monotonic()
+        ttl = max(1, int(self.config.get('category_sync_hours', 6))) * 3600
+        if not force and now - self.last_catalog_sync < ttl:
+            return
+        self.last_catalog_sync = now
+        self.mapper.clear_search_cache()
+        # Refresh only a catalogue already used; never download a whole list unnecessarily.
+        if self.api is not None and getattr(self.api, '_category_catalog', None):
+            try:
+                self.api.load_category_catalog(force=force)
+                self.emit('log', text='[카테고리 검색] 기존 카테고리 캐시 동기화 확인')
+            except APIError as error:
+                self.emit('log', text='[카테고리 검색] 캐시 동기화 실패 · ' + str(error))
+        active = {p.casefold() for p in self.processes}
+        for rule in self.effective_rules():
+            if active.intersection(p.casefold() for p in rule.processes) and not self.cancel.is_set():
+                self.validate_rule(rule, force=force)
+
+    def research_game(self, process):
+        self.refresh_processes()
+        rule = next((r for r in self.effective_rules() if process.casefold() in {p.casefold() for p in r.processes}), None)
+        self.mapper.clear_search_cache()
+        self.validation_retry.clear()
+        if rule is None:
+            self.last_auto_sync = 0
+            self.maybe_sync_auto(time.monotonic())
+            return
+        for key, record in list(self.pipeline.cache.records.items()):
+            if (category_choice_process_key(rule.process) in key.casefold()
+                    or record.get('game', {}).get('name') == rule.game_name):
+                self.pipeline.cache.invalidate(key)
+        manual = [Rule(**r) for r in self.config.get('rules', [])]
+        if rule in manual:
+            if self.validate_rule(rule, force=True):
+                self.pipeline.transition(self.rule_game(rule), rule.process, '연결 완료',
+                                         category_id=rule.category_id, category_name=rule.category_name)
+            return
+        found, unresolved = self.mapper.discover(self.processes, [r for r in self.effective_rules() if r != rule],
+                                                  lambda q: self.client().search(q, self.chzzk_open))
+        active = {p.casefold() for p in process_names()}
+        found = [r for r in found if active.intersection(p.casefold() for p in r.processes)]
+        if self.cancel.is_set():
+            return
+        if found:
+            old = [Rule(**r) for r in self.config.get('auto_rules', [])]
+            self.config['auto_rules'] = serialize_rules([r for r in old if r != rule] + found)
+            self.emit('auto_rules', data=self.config['auto_rules'])
+        else:
+            key = '|'.join((category_choice_process_key(rule.process), rule.category_type, rule.category_id))
+            self.validation_retry[key] = time.monotonic() + 300
+            self.pipeline.transition(self.rule_game(rule), rule.process, '확인 필요', error='다시 검색한 결과를 직접 확인해 주세요.')
+            self.config['auto_pending'] = [*self.config.get('auto_pending', []), *unresolved]
+            self.emit('auto_pending', data=self.config['auto_pending'])
+            for item in unresolved:
+                if item.get('reason') == 'category-choice':
+                    self.emit('category_choice_required', **{k: item[k] for k in ('token', 'process', 'game_name', 'candidates')})
 
     def sanitize_auto_state(self, emit=True):
         rules, pending, removed = cleanup_auto_mappings(
@@ -95,6 +220,8 @@ class Worker(QThread):
     def client(self):
         if self.api is None:
             self.api = ChzzkAPI(self.config['channel'], self.bridge)
+            self.api.cancelled = self.cancel.is_set
+            self.api.category_ttl = max(1, int(self.config.get('category_sync_hours', 6))) * 3600
         return self.api
 
     def drop_client(self):
@@ -102,9 +229,17 @@ class Worker(QThread):
             self.api.close()
             self.api = None
 
-    def refresh_processes(self):
-        self.processes = process_names()
+    def refresh_processes(self, force=False):
+        excluded = {str(p).casefold() for p in self.config.get('excluded_processes', [])}
+        cached = self.latest_snapshot
+        names = cached[1] if not force and cached and time.monotonic() - cached[0] < self.config.get('interval', 5) else process_names()
+        self.processes = [p for p in names if p.casefold() not in excluded]
+        self.pipeline.snapshot(self.processes)
+        self.emit('detected_games', data=self.processes)
+        self.publish_running_games()
         active = {category_choice_process_key(name) for name in self.processes}
+        self.session_rules = {key: rule for key, rule in self.session_rules.items()
+                              if any(category_choice_process_key(p) in active for p in rule.processes)}
         # Lobby/match transitions belong to the same running game session.
         self.category_choice_dismissed = {
             token for token in self.category_choice_dismissed
@@ -115,6 +250,25 @@ class Worker(QThread):
             if token.split('|', 1)[0] in active
         }
         return self.processes
+
+    def publish_running_games(self):
+        manual = [Rule(**r) for r in self.config.get('rules', [])]
+        for process in detectable_running_processes(self.processes, self.mapper.entries):
+            choices = self.mapper.entries.get(process.casefold(), [])
+            chosen = next((r for r in manual if process.casefold() in {p.casefold() for p in r.processes}), None)
+            game = dict(choices[0]) if len(choices) == 1 else {'name': ' / '.join(g.get('name', '') for g in choices)}
+            if chosen:
+                game = {'name': chosen.game_name or chosen.category_name, 'processes': chosen.processes}
+            key = __import__('automation').game_key(game, process)
+            state = self.pipeline.states.get(key)
+            if state is None or not state.running:
+                self.pipeline.transition(game, process, '감지됨')
+        for r in manual:
+            if any(p.casefold() in {n.casefold() for n in self.processes} for p in r.processes):
+                game = {'name': r.game_name or r.category_name, 'processes': r.processes}
+                key = __import__('automation').game_key(game, r.process)
+                if key not in self.pipeline.states or not self.pipeline.states[key].running:
+                    self.pipeline.transition(game, r.process, '감지됨')
 
     def running_game_processes(self):
         """Return only currently-running executables known as games by Discord.
@@ -131,10 +285,11 @@ class Worker(QThread):
         return games, info
 
     def effective_rules(self):
+        excluded = {str(p).casefold() for p in self.config.get('excluded_processes', [])}
         manual = [Rule(**r) for r in self.config.get('rules', [])]
         session = list(self.session_rules.values())
         auto = [Rule(**r) for r in self.config.get('auto_rules', [])]
-        return manual + session + auto
+        return [r for r in manual + session + auto if not excluded.intersection(p.casefold() for p in r.processes)]
 
     def maybe_sync_auto(self, now):
         if not self.config.get('auto_detect', True):
@@ -145,11 +300,16 @@ class Worker(QThread):
                 self.emit('auto_pending', data=[])
             return
         if not self.config.get('channel'):
+            self.mapper.ensure_index()
+            self.publish_running_games()
             return
-        if now - self.last_auto_sync < 15:
+        signature = tuple(p.casefold() for p in self.processes)
+        if signature == getattr(self, '_last_auto_signature', None) and now - self.last_auto_sync < 15:
             return
+        self._last_auto_signature = signature
         self.last_auto_sync = now
         info = self.mapper.ensure_index()
+        self.publish_running_games()
         if info.get('error'):
             self.emit('log', text='[자동 감지] Discord 목록 갱신 실패: ' + info['error'])
         new_rules, unresolved = self.mapper.discover(
@@ -158,11 +318,19 @@ class Worker(QThread):
             lambda keyword: self.client().search(keyword, self.chzzk_open),
         )
 
+        # Recheck executable names after slow searches; exited games cannot enter the apply queue.
+        active = {p.casefold() for p in process_names()}
+        new_rules = [r for r in new_rules if active.intersection(p.casefold() for p in r.processes) and not self.cancel.is_set()]
         changed = False
         if new_rules:
             auto_rules = [Rule(**r) for r in self.config.get('auto_rules', [])]
             existing = {p.casefold() for r in auto_rules for p in r.processes}
             for rule in new_rules:
+                category = {'categoryId': rule.category_id, 'categoryValue': rule.category_name, 'categoryType': rule.category_type}
+                key = '|'.join((category_choice_process_key(rule.process), rule.category_type, rule.category_id))
+                aliases = self.config.get('game_aliases', {}).get(rule.game_name, [])
+                origin = next((r for r in self.pipeline.cache.records.values() if r.get('category', {}).get('categoryId') == rule.category_id and r.get('game', {}).get('name') == rule.game_name), None)
+                self.pipeline.cache.put('rule:' + key, '|'.join([rule.category_id, rule.category_name, *aliases]), category, {'name': rule.game_name}, now=origin['verified_at'] if origin else None)
                 if any(p.casefold() in existing for p in rule.processes):
                     continue
                 auto_rules.append(rule)
@@ -199,6 +367,7 @@ class Worker(QThread):
                             'log',
                             text=f"[자동 감지] {item.get('game_name') or item.get('process')}의 치지직 카테고리 후보 {len(candidates)}개가 감지되어 선택을 기다립니다.",
                         )
+                normal_pending.append(item)
                 continue
             normal_pending.append(item)
 
@@ -236,6 +405,8 @@ class Worker(QThread):
         """
         if self.startup_talk_attempted:
             return
+        if self.config.get('only_when_live', False) and not self.client().is_live():
+            return
         self.startup_talk_attempted = True
         try:
             changed = self.client().apply(STARTUP_TALK_RULE, self.cancel.is_set)
@@ -251,29 +422,65 @@ class Worker(QThread):
         self.refresh_processes()
         now = time.monotonic()
         self.maybe_sync_auto(now)
+        # Fresh names defeat results arriving after game exit or replacement.
+        self.refresh_processes(force=True)
         rules = self.effective_rules()
-        rule = select_rule(rules, self.processes)
-        now = time.monotonic()
-
+        manual = [Rule(**r) for r in self.config.get('rules', [])]
+        rule = choose_representative(rules, self.processes, manual, self.config.get('preferred_process', ''))
         if rule is None:
             self.gate.observe(None, now)
-            self.status('감지 중 · 등록된 게임 실행을 기다립니다')
+            self.status('감지 중 · 대표 게임을 기다립니다' if not rules else '감지 중 · 여러 게임은 대표 게임을 선택해 주세요')
             return
-
-        if self.gate.observe(rule, now):
+        game = self.rule_game(rule)
+        # LoL and TFT share executables. Name-only scans must never infer the mode.
+        if (self.config.get('league_mode', 'legacy') == 'ask'
+                and any(p.casefold() in ('leagueclient.exe', 'league of legends.exe') for p in rule.processes)
+                and rule not in manual and rule not in self.session_rules.values()):
+            self.pipeline.transition(game, rule.process, '확인 필요', error='LoL / TFT는 직접 연결 또는 대표 게임 선택이 필요합니다.')
+            self.status('LoL / TFT 게임 모드를 직접 선택해 주세요')
+            item = {'process': rule.process, 'reason': 'multi-game', 'games': ['League of Legends', 'Teamfight Tactics']}
+            if item not in self.config.get('auto_pending', []):
+                self.config['auto_pending'] = [*self.config.get('auto_pending', []), item]
+                self.emit('auto_pending', data=self.config['auto_pending'])
+            return
+        if not self.validate_rule(rule) or self.cancel.is_set():
+            self.gate.observe(None, time.monotonic())
+            self.status('카테고리 검증 대기 · ' + rule.category_name)
+            return
+        self.refresh_processes(force=True)
+        if not any(p.casefold() in {n.casefold() for n in self.processes} for p in rule.processes):
+            self.gate.observe(None, time.monotonic())
+            return
+        stage = '적용 완료' if self.gate.applied == rule.key else '적용 대기'
+        state = self.pipeline.transition(game, rule.process, stage, category_id=rule.category_id,
+                                         category_name=rule.category_name, confidence_label='검색 결과 ID 검증 완료',
+                                         verified_at=datetime.now().isoformat(timespec='seconds'), representative=True)
+        for other in self.pipeline.states.values():
+            if other is not state and other.representative:
+                other.representative = False
+                self.emit('pipeline_state', data=asdict(other))
+        now = time.monotonic()
+        if self.gate.observe(rule, now) and self.pipeline.ready(rule, state):
             try:
+                if self.config.get('only_when_live', False) and not self.client().is_live():
+                    self.status('방송 시작 대기 · ' + rule.category_name)
+                    return
+                self.pipeline.transition(game, rule.process, '적용 중')
                 changed = self.client().apply(rule, self.cancel.is_set)
                 self.gate.success(rule, time.monotonic())
+                self.pipeline.transition(game, rule.process, '적용 완료')
                 self.status(f'적용됨 · {rule.category_name}')
-                self.emit('applied', text=f'{rule.process} → {rule.category_name}', changed=changed)
+                self.emit('applied', text=f'{rule.process} → {rule.category_name}', changed=changed, category_name=rule.category_name)
             except APIError as e:
+                if e.auth:
+                    self.emit('error', operation='check', text='치지직 인증을 다시 확인해 주세요.')
                 if e.permanent:
                     self.enabled = False
                     self.emit('enabled', value=False)
                 self.gate.failure(time.monotonic(), e.retry_after)
-                message = '[자동 변경] ' + str(e)
-                self.status(message)
-                self.emit('log', text=message)
+                self.pipeline.transition(game, rule.process, '오류', error='카테고리를 변경하지 못했습니다. 연결을 확인하고 다시 시도해 주세요.')
+                self.status('자동 변경 실패 · 연결을 확인해 주세요')
+                self.emit('log', text='[카테고리 변경] ' + str(e))
         elif self.gate.applied == rule.key:
             self.status(f'적용됨 · {rule.category_name}')
         elif now < self.gate.next_allowed:
@@ -287,8 +494,10 @@ class Worker(QThread):
             self.stop_event.set()
         elif name == 'configure':
             self.drop_client()
+            old_channel = self.config.get('channel')
             self.config = value
-            self.gate = Gate()
+            if old_channel != value.get('channel'):
+                self.gate = Gate()
             self.cancel.clear()
             self.mapper = DiscordAutoMapper(
                 discord_cache_file(),
@@ -299,13 +508,15 @@ class Worker(QThread):
             if self.chzzk_open is not None:
                 self.chzzk_open.close()
             self.chzzk_open = self.build_chzzk_open_client()
+            self.configure_mapper()
+            self.validation_retry.clear()
             self.last_auto_sync = 0.0
-            self.session_rules = {}
             self.category_choice_waiting.clear()
             self.category_choice_dismissed.clear()
             self.sanitize_auto_state(emit=True)
         elif name == 'enable':
             self.enabled = bool(value)
+            self.cancel.clear()
             if self.enabled:
                 self.cancel.clear()
                 self.gate = Gate()
@@ -314,9 +525,9 @@ class Worker(QThread):
             self.emit('enabled', value=self.enabled)
         elif name == 'check':
             current = self.client().settings()
-            self.emit('checked', text='연결 성공 · ' + str((current.get('category') or {}).get('categoryValue', '카테고리 없음')))
+            self.emit('checked', text='연결 성공 · ' + str((current.get('category') or {}).get('categoryValue', '카테고리 없음')), category_name=str((current.get('category') or {}).get('categoryValue') or '카테고리 없음'))
         elif name == 'search':
-            data = self.client().search(value['keyword'], self.chzzk_open)
+            data = self.mapper._cached_search(value['keyword'], lambda query: self.client().search(query, self.chzzk_open))
             self.emit('search', request=value['request'], data=data,
                       official=bool(self.chzzk_open and self.chzzk_open.configured))
         elif name == 'chzzk_open_test':
@@ -337,7 +548,10 @@ class Worker(QThread):
                 index_count=len(self.mapper.entries),
                 warning=str(info.get('error') or ''),
             )
+        elif name == 'research_game':
+            self.research_game(str(value or ''))
         elif name == 'sync_auto':
+            self.sync_category_data(force=True)
             self.mapper.clear_search_cache()
             self.refresh_processes()
             self.last_auto_sync = 0.0
@@ -392,31 +606,59 @@ class Worker(QThread):
             self.emit('enabled', value=False)
             self.status('로그인 정보 삭제됨')
 
+    def watch_process_changes(self):
+        previous = None
+        while not self.stop_event.is_set():
+            try:
+                names = tuple(process_names())
+                self.latest_snapshot = (time.monotonic(), names)
+                if names != previous:
+                    previous = names
+                    excluded = {p.casefold() for p in self.config.get('excluded_processes', [])}
+                    active = [p for p in names if p.casefold() not in excluded]
+                    self.emit('detected_games', data=active, game_details=game_process_details(active, self.mapper.entries))
+            except OSError:
+                self.emit('error', operation='detection', text='실행 중인 게임을 확인할 수 없습니다. 감지를 다시 시작해 주세요.')
+            self.stop_event.wait(self.config.get('interval', 5))
+
     def run(self):
+        self.snapshot_thread = threading.Thread(target=self.watch_process_changes, name='ChzzkProcessWatcher', daemon=True)
+        self.snapshot_thread.start()
         next_scan = time.monotonic()
         try:
             while not self.stop_event.is_set():
-                timeout = max(0, next_scan - time.monotonic()) if self.enabled else None
+                timeout = max(0, next_scan - time.monotonic())
                 try:
                     name, value = self.commands.get(timeout=timeout)
                     try:
                         self.command(name, value)
                     except Exception as e:
-                        message = str(e) if isinstance(e, (APIError, ChzzkOpenAPIError, ValueError, RuntimeError)) else '작업 실패. 계정 설정과 네트워크를 확인해 주세요.'
-                        label = {'check': '연결 확인', 'search': '카테고리 검색', 'chzzk_open_test': 'CHZZK 공식 API 연결 확인'}.get(name, name)
-                        message = f'[{label}] {message}'
+                        detail = str(e) if isinstance(e, (APIError, ChzzkOpenAPIError, ValueError, RuntimeError)) else type(e).__name__
+                        label = {'check': '치지직 연결', 'search': '카테고리 검색', 'chzzk_open_test': '공식 API 연결'}.get(name, name)
+                        self.emit('log', text=f'[{label}] {detail}')
+                        message = {'check': '치지직 계정을 확인할 수 없습니다. 스튜디오 로그인 후 다시 연결해 주세요.',
+                                   'search': '게임 카테고리를 검색하지 못했습니다. 다시 검색하거나 직접 선택해 주세요.',
+                                   'chzzk_open_test': '공식 카테고리 API에 연결하지 못했습니다. 인증 설정을 확인해 주세요.'}.get(name, '작업을 완료하지 못했습니다. 연결을 확인하고 다시 시도해 주세요.')
                         self.emit('error', operation=name, text=message)
                 except queue.Empty:
                     pass
-                if self.enabled and time.monotonic() >= next_scan:
+                if time.monotonic() >= next_scan:
                     try:
-                        self.scan()
+                        self.sync_category_data()
+                        if self.enabled:
+                            self.scan()
+                        elif self.config.get('auto_detect', True):
+                            self.refresh_processes()
+                            self.maybe_sync_auto(time.monotonic())
                     except Exception:
                         self.enabled = False
                         self.emit('enabled', value=False)
                         self.status('감지를 중단했습니다. 계정 설정과 게임 규칙을 확인해 주세요.')
                     next_scan = time.monotonic() + self.config.get('interval', 5)
         finally:
+            self.stop_event.set()
+            if self.snapshot_thread:
+                self.snapshot_thread.join(timeout=3)
             self.drop_client()
             if self.chzzk_open is not None:
                 self.chzzk_open.close()
