@@ -4,6 +4,7 @@ from ctypes import wintypes
 import hashlib
 import json
 import os
+import ntpath
 from pathlib import Path
 import re
 import shutil
@@ -270,15 +271,24 @@ def _cleanup_user_startup():
     shortcut.unlink(missing_ok=True)
 
 
+def _msi_install_command(package, install_dir, log_path):
+    msiexec = ntpath.join(os.environ.get('SystemRoot', r'C:\Windows'), 'System32', 'msiexec.exe')
+    folder = str(install_dir)
+    if not folder or any(character in folder for character in ('"', '\r', '\n', '\x00')):
+        raise ValueError('MSI 설치 경로의 형식이 올바르지 않습니다.')
+    # msiexec parses properties itself: quote the value, not the entire NAME=value.
+    command = subprocess.list2cmdline([
+        msiexec, '/i', str(package), '/passive', '/norestart', '/L*v', str(log_path),
+    ])
+    return command + ' INSTALLFOLDER="' + folder + '"'
+
+
 def _install_msi(package, install_dir, log_path):
     """Return True when Windows Installer requires a reboot; preserve its log."""
     if os.name != 'nt':
         raise RuntimeError('MSI 업데이트는 Windows에서만 실행할 수 있습니다.')
-    msiexec = Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'System32' / 'msiexec.exe'
-    result = subprocess.run([
-        str(msiexec), '/i', str(package), '/passive', '/norestart',
-        f'INSTALLFOLDER={Path(install_dir)}', '/L*v', str(log_path),
-    ], check=False)
+    result = subprocess.run(_msi_install_command(package, install_dir, log_path),
+                            shell=False, check=False)
     code = result.returncode
     if code in (0, 3010, 1641):
         return code != 0
@@ -286,6 +296,8 @@ def _install_msi(package, install_dir, log_path):
         raise RuntimeError('MSI 설치 또는 관리자 권한 요청이 취소되었습니다.')
     if code == 1618:
         raise RuntimeError('다른 Windows 설치 작업이 진행 중입니다. 완료된 뒤 다시 시도해 주세요.')
+    if code == 1639:
+        raise RuntimeError(f'MSI 명령 형식 오류 (코드 1639). MSI 설치 파일을 직접 실행해 주세요. 로그: {log_path}')
     raise RuntimeError(f'MSI 설치 실패 (코드 {code}). 로그: {log_path}')
 
 

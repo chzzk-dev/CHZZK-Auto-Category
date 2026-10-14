@@ -220,7 +220,7 @@ class MsiUpdateTests(unittest.TestCase):
     def test_msi_result_codes_and_space_safe_arguments(self):
         # Build Paths before mocking os.name so this test can run on Linux.
         package, install, log = Path('/temp dir/new.msi'), Path('/app dir'), Path('/log.txt')
-        for code in (0, 3010, 1641, 1602, 1618, 1603):
+        for code in (0, 3010, 1641, 1602, 1618, 1603, 1639):
             with self.subTest(code=code), patch.object(updater_app.os, 'name', 'nt'), \
                  patch.object(updater_app, 'Path', side_effect=lambda v: type(package)(v)), \
                  patch.object(updater_app.subprocess, 'run', return_value=Mock(returncode=code)) as run:
@@ -230,8 +230,29 @@ class MsiUpdateTests(unittest.TestCase):
                     with self.assertRaises(RuntimeError):
                         updater_app._install_msi(package, install, log)
                 args = run.call_args.args[0]
-                self.assertIn('INSTALLFOLDER=' + str(install), args)
+                self.assertIsInstance(args, str)
+                self.assertIn('INSTALLFOLDER="' + str(install) + '"', args)
                 self.assertIn('/norestart', args)
+                self.assertFalse(run.call_args.kwargs['shell'])
+
+    def test_msi_property_quotes_only_the_value_for_windows_paths(self):
+        package = r'C:\Temp\다운로드 & test\new.msi'
+        log = r'C:\Temp\업데이트 로그\install.log'
+        for folder in (r'C:\Program Files\CHZZK Auto Category', 'C:\\한글 설치 & test\\', 'C:\\'):
+            with self.subTest(folder=folder):
+                command = updater_app._msi_install_command(package, folder, log)
+                self.assertIn('INSTALLFOLDER="' + folder + '"', command)
+                self.assertNotIn('"INSTALLFOLDER=', command)
+                self.assertIn('"' + package + '"', command)
+                self.assertIn('/L*v "' + log + '"', command)
+
+    def test_invalid_property_value_does_not_start_windows_installer(self):
+        for folder in ('', 'C:\\bad"path', 'C:\\bad\npath', 'C:\\bad\rpath', 'C:\\bad\x00path'):
+            with self.subTest(folder=folder), patch.object(updater_app.os, 'name', 'nt'), \
+                    patch.object(updater_app.subprocess, 'run') as run:
+                with self.assertRaises(ValueError):
+                    updater_app._install_msi('new.msi', folder, 'install.log')
+                run.assert_not_called()
 
 
 if __name__ == '__main__':

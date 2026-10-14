@@ -12,7 +12,7 @@ Secret이 없는 일반 빌드도 테스트 및 MSI 생성은 가능합니다. �
 
 1. `version.py`의 `APP_VERSION`을 기존 배포보다 높은 세 자리 버전으로 수정합니다.
 2. `CHANGELOG.md`의 `## 미배포`에 사용자가 이해할 변경 사항을 적고 main에 업로드합니다.
-3. main 업로드로 시작한 Windows 빌드와 검증이 성공하면 새 버전을 GitHub Release에 자동 게시합니다. 수동으로 시작하려면 Actions → **Windows MSI Build and Release** → **Run workflow**에서 main과 `publish_release = true`를 선택합니다. version은 비워 두거나 소스와 같은 버전을 입력합니다. 또는 `v4.11.4`와 같은 태그를 올립니다. 기존 형식 `4.11.4`도 지원합니다.
+3. main 업로드로 시작한 Windows 빌드와 검증이 성공하면 새 버전을 GitHub Release에 자동 게시합니다. 수동으로 시작하려면 Actions → **Windows MSI Build and Release** → **Run workflow**에서 main과 `publish_release = true`를 선택합니다. version은 비워 두거나 소스와 같은 버전을 입력합니다. 또는 `v4.11.5`와 같은 태그를 올립니다. 기존 형식 `4.11.5`도 지원합니다.
 
 main 업로드는 소스 버전이 모든 공개 정식 릴리스보다 높을 때 빌드 후 자동 배포합니다. 이미 배포된 버전이면 빌드만 진행합니다. PR과 기본 수동 실행도 빌드만 합니다. 태그 또는 게시 옵션을 선택한 수동 실행에서는 동일하거나 낮은 버전, 소스와 다른 버전·태그를 거부합니다. 게시한 릴리스의 파일을 덮어쓰지 않습니다. 다음 업데이트를 배포할 때는 `APP_VERSION`을 먼저 올리세요.
 

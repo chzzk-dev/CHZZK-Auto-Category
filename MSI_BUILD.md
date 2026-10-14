@@ -1,6 +1,6 @@
-# 4.11.4 MSI 전용 빌드
+# 4.11.5 MSI 전용 빌드
 
-앱 버전은 4.11.4입니다. GitHub 자동 빌드와 배포 기록은 [GITHUB_RELEASE.md](GITHUB_RELEASE.md)를 참고하세요. 배포용 설치 파일은 MSI 하나이며 서명 기능은 추가하지 않았습니다.
+앱 버전은 4.11.5입니다. GitHub 자동 빌드와 배포 기록은 [GITHUB_RELEASE.md](GITHUB_RELEASE.md)를 참고하세요. 배포용 설치 파일은 MSI 하나이며 서명 기능은 추가하지 않았습니다.
 앱 자체는 기존 Python → Cython → PyInstaller 빌드를 유지합니다. MSI 안에 앱 EXE, 업데이트 보조 EXE, `_internal`이 들어가므로 사용자에게 Python 설치가 필요하지 않습니다.
 전용 설치 화면은 C# WPF / .NET Framework 4.8 모듈입니다. .NET 8 SDK는 빌드 PC에서만 사용하고, 사용자 PC에는 .NET Framework 4.8이 필요합니다. 앱 본체는 Python을 유지합니다.
 
@@ -33,11 +33,11 @@ build_release.bat
 
 결과:
 
-- `dist-installer/ChzzkAutoCategory-4.11.4.msi`
-- `website/downloads/ChzzkAutoCategory-4.11.4.msi`
+- `dist-installer/ChzzkAutoCategory-4.11.5.msi`
+- `website/downloads/ChzzkAutoCategory-4.11.5.msi`
 - `website/downloads/SHA256SUMS.txt`
 - `website/downloads/latest.json`
-- `website/downloads/RELEASE_NOTES-4.11.4.md`
+- `website/downloads/RELEASE_NOTES-4.11.5.md`
 - `build/release-notes/CHANGELOG.md`
 
 Setup.exe, 앱 배포 ZIP, 별도 제거 EXE는 빌드·배포하지 않습니다. 개발용 소스 ZIP과 Chrome 확장 ZIP은 설치 패키지와 별개입니다.
@@ -75,14 +75,14 @@ diagnose_msi.bat
 직접 MSI 경로를 지정하거나 MSI 파일을 BAT에 끌어놓아 실행할 수 있습니다.
 
 ```bat
-diagnose_msi.bat "dist-installer\ChzzkAutoCategory-4.11.4.msi" native
+diagnose_msi.bat "dist-installer\ChzzkAutoCategory-4.11.5.msi" native
 ```
 
 위 명령은 Fix2의 관리 UI 초기화를 건너뛰고 기본 MSI 화면으로 진행하는 진단 옵션입니다. DLL 로드 전 실패에는 적용되지 않을 수 있습니다.
 관리 UI 전체를 건너뛰는 임시 설치는 다음처럼 `/passive`를 사용할 수 있습니다. 이 경우 설치 후 앱을 시작 메뉴에서 직접 실행합니다.
 
 ```bat
-msiexec /i "dist-installer\ChzzkAutoCategory-4.11.4.msi" /passive /norestart /L*V "%TEMP%\chzzk-msi-passive.log"
+msiexec /i "dist-installer\ChzzkAutoCategory-4.11.5.msi" /passive /norestart /L*V "%TEMP%\chzzk-msi-passive.log"
 ```
 
 ## 설치와 최초 설정
@@ -165,3 +165,7 @@ HTML 디자인 시안의 한국어 렌더링·화면 전환도 별도로 검사�
 MSI 릴리스 선택, 체크섬 불일치/누락 차단, 설치 실패 시 직접 파일 삭제 방지, MSI 결과 코드 처리를 검증합니다.
 Windows용 네이티브 빌드, WiX 링크/ICE 검증, 실제 설치·업그레이드·제거는 Windows에서 추가 확인해야 합니다.
 Windows Sandbox에서 신규 설치 → 최초 설정 → 재실행 → 높은 버전 설치 → 취소/복구 → 제거 순서로 확인해 주세요.
+
+## 1639 업데이트 오류
+
+4.11.5는 공백이 있는 설치 경로의 MSI 명령 인수를 수정합니다. 기존 업데이터에서 1639가 발생하면 수정본 MSI를 직접 실행해 한 번 업데이트하세요. 기존 설치를 먼저 제거할 필요가 없습니다. 설치된 새 업데이터부터 수정한 인수를 사용합니다. CI에서는 기존 명령의 1639 재현, 수정 명령으로의 실제 설치·업그레이드·제거 및 설정 보존을 검사합니다.

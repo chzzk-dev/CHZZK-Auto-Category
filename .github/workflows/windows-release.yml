@@ -123,6 +123,10 @@ jobs:
         run: |
           dotnet run --project installer/modern-ui/tests/StateTests.csproj --configuration Release
           if ($LASTEXITCODE -ne 0) { throw 'Installer state tests failed.' }
+      - name: Install and upgrade the MSI using the actual updater command
+        run: |
+          .venv/Scripts/python.exe scripts/windows_msi_smoke.py
+          if ($LASTEXITCODE -ne 0) { throw 'Actual MSI installation/upgrade verification failed.' }
       - name: Load the actual WPF installer on Windows
         run: |
           dotnet build installer/modern-ui/tests/UiSmoke.csproj --configuration Release --output build/ui-smoke
@@ -158,6 +162,7 @@ jobs:
           path: |
             build/protected/*/native-audit.json
             build/msi/Product.wxs
+            build/msi-smoke/*.log
   publish:
     needs: build
     if: needs.build.outputs.publish == 'true'
