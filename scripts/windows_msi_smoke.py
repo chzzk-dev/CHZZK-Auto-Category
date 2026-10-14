@@ -47,6 +47,21 @@ def installed_version():
         return winreg.QueryValueEx(key, 'Version')[0]
 
 
+def malformed_property_result(package, target):
+    """Check MSI's property parser without any interactive error/help window."""
+    msi = ctypes.WinDLL('msi', use_last_error=True)
+    msi.MsiSetInternalUI.argtypes = [ctypes.c_uint, ctypes.POINTER(ctypes.c_void_p)]
+    msi.MsiSetInternalUI.restype = ctypes.c_uint
+    msi.MsiInstallProductW.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p]
+    msi.MsiInstallProductW.restype = ctypes.c_uint
+    previous = msi.MsiSetInternalUI(2, None)  # INSTALLUILEVEL_NONE
+    try:
+        properties = subprocess.list2cmdline(['INSTALLFOLDER=' + str(target)])
+        return msi.MsiInstallProductW(str(package), properties)
+    finally:
+        msi.MsiSetInternalUI(previous, None)
+
+
 def main():
     if os.name != 'nt' or os.environ.get('GITHUB_ACTIONS') != 'true':
         raise RuntimeError('Run this integration check only on the disposable Windows CI runner.')
@@ -80,15 +95,12 @@ def main():
         original_local = os.environ.get('LOCALAPPDATA')
         os.environ['LOCALAPPDATA'] = str(profile)
         try:
-            # Reproduce the old CreateProcess command before applying the fix.
-            old_args = [msiexec, '/i', str(baseline), '/passive', '/norestart',
-                        'INSTALLFOLDER=' + str(target), '/L*v', str(logs / 'legacy-command.log')]
-            legacy = subprocess.run(old_args, shell=False, check=False, timeout=90)
-            print('Legacy whole-property quoting exit code:', legacy.returncode, flush=True)
-            if legacy.returncode in (0, 3010, 1641):
+            legacy = malformed_property_result(baseline, target)
+            print('Legacy whole-property quoting MSI parser result:', legacy, flush=True)
+            if legacy in (0, 3010, 1641):
                 installed_package = baseline
-            if legacy.returncode != 1639:
-                raise RuntimeError('The expected legacy command-line error 1639 was not reproduced.')
+            if legacy not in (87, 1639):
+                raise RuntimeError('The MSI property parser did not reject the legacy invalid argument.')
 
             _install_msi(baseline, target, logs / 'baseline-install.log')
             installed_package = baseline
