@@ -5,10 +5,31 @@
 
 ## 미배포
 
+- 아직 기록할 변경 사항이 없습니다.
+
+## [4.11.5](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.11.5) — 2026-10-14 (KST)
+
+### 변경 사항
+
 - 4.11.5는 기존 업데이터의 반복 오류를 막기 위해 사전 릴리스로 게시합니다. 자동 업데이트에는 노출되지 않으며 MSI를 직접 설치해야 합니다.
 - 공백이 있는 설치 경로의 MSI 인수 따옴표 처리를 수정해 자동 업데이트의 오류 1639를 해결합니다.
 - Windows CI에서 실제 MSI 설치·업그레이드·제거와 사용자 설정 보존을 확인한 뒤 릴리스합니다.
 - 기존 업데이터에 이 오류가 있는 경우 이번 수정본 MSI를 한 번 직접 실행해 업데이트하세요.
+
+### 커밋
+
+- test: validate invalid MSI property syntax without interactive error dialogs ([cdc297a](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/cdc297acab043d18d7965b4b3377a6f3b8716a24))
+- ci: publish the updater repair as a manual prerelease \[cancel obsolete builds\] ([8bc2d0f](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/8bc2d0f8f310eff8f476885ccb6a2ad74adb264c))
+- test: select an available stable MSI baseline and verify both updated executables ([ab79759](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/ab797597bc9c9e285310ee59a3dd9185a2c94e9e))
+- fix: quote MSI property values correctly and verify real upgrades for 4.11.5 ([bce1ed8](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/bce1ed8e740250b72a9129ce5559ab63b497e046))
+
+[전체 변경 비교](https://github.com/chzzk-dev/CHZZK-Auto-Category/compare/v4.11.4...v4.11.5)
+
+### 설치 파일
+
+- `ChzzkAutoCategory-4.11.5.msi`
+- `SHA256SUMS.txt`에서 설치 파일의 SHA-256을 확인할 수 있습니다.
+- 기존 MSI 설치본은 새 MSI로 업그레이드하며 사용자 설정을 유지합니다.
 
 ## [4.11.4](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.11.4) — 2026-10-14 (KST)
 
