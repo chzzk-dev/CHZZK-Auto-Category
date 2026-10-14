@@ -1,0 +1,99 @@
+:root {
+  color-scheme: dark;
+  font-family: Pretendard, "Noto Sans KR", system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  width: 340px;
+  background: #07130f;
+  color: #eafff1;
+}
+
+main {
+  padding: 18px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.logo {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #10c18a, #1fe7b2);
+  color: #03110b;
+  font-weight: 900;
+  font-size: 22px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.brand p {
+  margin: 3px 0 0;
+  color: #85a99a;
+  font-size: 12px;
+}
+
+.status {
+  border: 1px solid #2b7254;
+  border-radius: 10px;
+  background: #0c261d;
+  padding: 11px 12px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.status.ok {
+  border-color: #2de7aa;
+}
+
+.status.error {
+  border-color: #b45757;
+}
+
+button {
+  width: 100%;
+  border: 1px solid #2b6952;
+  border-radius: 10px;
+  background: #103124;
+  color: #d5f3e3;
+  padding: 10px 12px;
+  margin-top: 8px;
+  cursor: pointer;
+}
+
+button.primary {
+  border: 0;
+  background: linear-gradient(90deg, #10c18a, #1fe7b2);
+  color: #062016;
+  font-weight: 800;
+}
+
+.hint {
+  margin: 14px 0 0;
+  color: #7ea291;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+
+button.download {
+  background: transparent;
+  border-color: #316c56;
+  color: #a9d9c1;
+}
+
+button.download:hover {
+  background: #0f2a20;
+  border-color: #42a47d;
+}

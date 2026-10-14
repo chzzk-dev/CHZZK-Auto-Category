@@ -9,3 +9,16 @@ __pycache__/
 *.pyc
 
 *.spec
+dist-updater/
+dist-webstore/
+website/downloads/
+release-assets/
+**/bin/
+**/obj/
+.env
+.env.*
+!.env.example
+*.log
+*.pyd
+*.pdb
+*.msi

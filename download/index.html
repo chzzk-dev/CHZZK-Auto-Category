@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#07130f">
+  <meta name="description" content="CHZZK Auto Category Windows 앱 다운로드">
+  <title>CHZZK Auto Category 다운로드</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="glow glow-one"></div>
+  <div class="glow glow-two"></div>
+
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="CHZZK Auto Category 홈">
+      <span class="brand-mark">C</span>
+      <span class="brand-copy">
+        <strong>CHZZK Auto Category</strong>
+        <small>Windows Local Bridge</small>
+      </span>
+    </a>
+    <a class="ghost-link" href="https://studio.chzzk.naver.com/" target="_blank" rel="noreferrer">치지직 스튜디오</a>
+  </header>
+
+  <main class="page-shell">
+    <section class="hero">
+      <div class="eyebrow"><span class="dot"></span> Chrome 확장프로그램과 함께 사용</div>
+      <h1>로컬 앱을 설치하면<br><span>게임 카테고리가 자동으로 바뀝니다.</span></h1>
+      <p class="hero-copy">
+        실행 중인 게임을 감지하고 Chrome의 치지직 로그인 상태와 연결해 방송 카테고리를 자동으로 변경합니다.
+        로그인 정보는 외부 서버에 저장하지 않습니다.
+      </p>
+
+      <div class="download-card">
+        <div class="download-icon" aria-hidden="true">↓</div>
+        <div class="download-copy">
+          <div class="download-title-row">
+            <h2>CHZZK Auto Category</h2>
+            <span class="badge">Windows</span>
+          </div>
+          <p>Windows 10/11 · 64비트</p>
+          <div class="meta">
+            <span>버전 <strong id="versionText">확인 중</strong></span>
+            <span class="separator">•</span>
+            <span>로컬 연결 <strong>127.0.0.1:5000</strong></span>
+            <span class="separator">•</span>
+            <span id="sizeText">설치 프로그램</span>
+          </div>
+        </div>
+        <a id="downloadButton" class="download-button" href="https://github.com/chzzk-dev/CHZZK-Auto-Category/releases">
+          MSI 다운로드
+        </a>
+      </div>
+
+      <p class="download-note">
+        <span id="releaseState">GitHub Releases에서 최신 Windows 설치 파일을 확인하고 있습니다.</span>
+      </p>
+    </section>
+
+    <section class="info-card" aria-labelledby="migration-title">
+      <div>
+        <h3 id="migration-title">기존 EXE 설치본을 사용 중이신가요?</h3>
+        <p>트레이에서 앱을 종료한 뒤 Windows 설정 → 앱에서 기존 프로그램을 제거해 주세요.
+          제거 창의 <strong>“사용자 설정, 게임 규칙, 캐시와 로그도 함께 삭제” 체크를 해제</strong>해야 설정을 유지할 수 있습니다.
+          그다음 새 MSI를 설치해 주세요. 기존 ZIP 자동 업데이트에서는 MSI로 전환되지 않습니다.</p>
+      </div>
+    </section>
+
+    <section class="steps" aria-labelledby="steps-title">
+      <div class="section-heading">
+        <p>설치 방법</p>
+        <h2 id="steps-title">3단계면 끝납니다.</h2>
+      </div>
+
+      <div class="step-grid">
+        <article class="step-card">
+          <span class="step-number">01</span>
+          <h3>앱 다운로드</h3>
+          <p>위의 MSI 다운로드 버튼을 눌러 설치 프로그램을 실행합니다. 필요한 앱 파일이 MSI에 포함되어 있습니다. 설치 완료 화면에서 프로그램을 실행하면 최초 설정을 안내합니다.</p>
+        </article>
+        <article class="step-card">
+          <span class="step-number">02</span>
+          <h3>앱 실행</h3>
+          <p>설치 완료 화면에서 앱을 실행한 뒤, 처음 한 번 채널과 확장 연결을 설정합니다. 기본 설치 위치는 <code>C:\Program Files\CHZZK Auto Category</code>입니다.</p>
+        </article>
+        <article class="step-card">
+          <span class="step-number">03</span>
+          <h3>확장 연결</h3>
+          <p>앱을 실행한 상태에서 Chrome 확장프로그램의 “연결 상태 새로고침”을 누릅니다. 로컬 연결 권한 요청이 나오면 허용해 주세요.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="info-grid">
+      <article class="info-card">
+        <div class="info-icon">⌁</div>
+        <div>
+          <h3>PC 안에서만 연결</h3>
+          <p>확장프로그램과 앱은 <code>127.0.0.1</code>을 통해 같은 PC 안에서 통신합니다.</p>
+        </div>
+      </article>
+      <article class="info-card">
+        <div class="info-icon">◎</div>
+        <div>
+          <h3>Chrome 로그인 상태 사용</h3>
+          <p>치지직 스튜디오에 로그인된 Chrome 세션을 이용해 카테고리 변경 요청을 처리합니다.</p>
+        </div>
+      </article>
+      <article class="info-card">
+        <div class="info-icon">↻</div>
+        <div>
+          <h3>자동 게임 감지</h3>
+          <p>실행 중인 게임을 감지하고 연결된 치지직 게임 카테고리로 자동 전환합니다.</p>
+        </div>
+      </article>
+      <article class="info-card">
+        <div class="info-icon">⌁</div>
+        <div>
+          <h3>Windows 자동 실행</h3>
+          <p>설치 후 Windows 로그인 시 트레이에서 자동 시작되며, GitHub Releases에 새 패치가 있으면 자동 업데이트를 진행합니다.</p>
+        </div>
+      </article>
+    </section>
+
+    <section class="help-card">
+      <div>
+        <p class="help-kicker">설치 후 연결되지 않나요?</p>
+        <h2>확장프로그램에서 연결 상태를 다시 확인해 주세요.</h2>
+        <p>앱을 먼저 실행한 뒤 Chrome 확장프로그램 팝업의 <strong>연결 상태 새로고침</strong> 버튼을 누르시면 됩니다.</p>
+      </div>
+      <a class="secondary-button" href="https://studio.chzzk.naver.com/" target="_blank" rel="noreferrer">치지직 스튜디오 열기</a>
+    </section>
+  </main>
+
+  <footer>
+    <span>CHZZK Auto Category</span>
+    <span>·</span>
+    <span>Windows Local Bridge</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

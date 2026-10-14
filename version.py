@@ -1,0 +1,8 @@
+APP_VERSION = '4.11.4'
+GITHUB_REPO = 'chzzk-dev/CHZZK-Auto-Category'
+GITHUB_RELEASES_URL = f'https://github.com/{GITHUB_REPO}/releases'
+GITHUB_LATEST_API = f'https://api.github.com/repos/{GITHUB_REPO}/releases/latest'
+SETUP_ASSET_NAME = f'ChzzkAutoCategory-{APP_VERSION}.msi'
+UPDATER_EXE_NAME = 'ChzzkAutoUpdater.exe'
+UNINSTALLER_EXE_NAME = 'ChzzkAutoUninstall.exe'
+CHECKSUM_ASSET_NAME = 'SHA256SUMS.txt'

@@ -1,133 +1,172 @@
-name: Build Windows Release
+name: Windows MSI Build and Release
 
 on:
+  push:
+    branches: [main]
+    tags: ['v*', '[0-9]*']
+  pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (example: 0.4.0)'
-        required: true
+        description: 'Optional: must match APP_VERSION in version.py'
+        required: false
         type: string
-        default: '0.4.0'
-
+        default: ''
       publish_release:
-        description: 'Publish GitHub Release'
+        description: 'Publish the MSI and record CHANGELOG.md'
         required: true
         type: boolean
-        default: true
+        default: false
 
-  push:
-    tags:
-      - 'v*'
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-msi-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
     runs-on: windows-latest
-
-    permissions:
-      contents: write
-
+    timeout-minutes: 60
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      publish: ${{ steps.resolve.outputs.publish }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONUTF8: '1'
+    defaults:
+      run:
+        shell: pwsh
     steps:
-      - name: Checkout
+      - name: Checkout source and release history
         uses: actions/checkout@v4
-
-      - name: Setup Python
+        with:
+          fetch-depth: 0
+      - name: Set up Python 3.13 x64
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-
-      - name: Resolve version
-        shell: pwsh
-        run: |
-          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
-            $version = '${{ inputs.version }}'
-          } else {
-            $version = '${{ github.ref_name }}'.TrimStart('v')
-          }
-
-          "RELEASE_VERSION=$version" | Out-File `
-            -FilePath $env:GITHUB_ENV `
-            -Append
-
-          $versionFile = Get-Content version.py -Raw
-
-          $versionFile = $versionFile -replace `
-            "APP_VERSION = '[^']+'", `
-            "APP_VERSION = '$version'"
-
-          Set-Content `
-            version.py `
-            $versionFile `
-            -Encoding UTF8
-
-          $manifestPath = 'extension/manifest.json'
-
-          $manifest = Get-Content `
-            $manifestPath `
-            -Raw |
-            ConvertFrom-Json
-
-          $manifest.version = $version
-
-          $manifest |
-            ConvertTo-Json -Depth 20 |
-            Set-Content `
-              $manifestPath `
-              -Encoding UTF8
-
-      - name: Build app
-        shell: cmd
-        run: build.bat
-
-      - name: Build updater
-        shell: cmd
-        run: build_updater.bat
-
-      - name: Build uninstaller
-        shell: cmd
-        run: build_uninstaller.bat
-
-      - name: Build Setup EXE
-        shell: cmd
-        run: installer\build_installer.bat
-
-      - name: Create release assets
-        shell: cmd
-        run: .venv\Scripts\python.exe release.py --version %RELEASE_VERSION%
-
-      - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+          python-version: '3.13'
+          architecture: x64
+      - name: Set up .NET 8 SDK
+        uses: actions/setup-dotnet@v4
         with:
-          name: CHZZK-Auto-Category-Windows-${{ env.RELEASE_VERSION }}
-          if-no-files-found: error
-          path: |
-            website/downloads/latest.json
-            website/downloads/SHA256SUMS.txt
-            website/downloads/ChzzkAutoCategory-Setup.exe
-            website/downloads/ChzzkAutoCategory-*.zip
-
-      - name: Publish GitHub Release
-        if: >
-          github.event_name == 'push' ||
-          (github.event_name == 'workflow_dispatch' && inputs.publish_release)
-        shell: pwsh
-
+          dotnet-version: '8.0.x'
+      - name: Resolve and validate release version
+        id: resolve
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+          RELEASE_REF: ${{ github.ref_name }}
+          IS_TAG: ${{ github.ref_type == 'tag' }}
+          SHOULD_PUBLISH: ${{ (github.event_name == 'push' && github.ref_type == 'tag') || (github.event_name == 'workflow_dispatch' && inputs.publish_release) }}
+        run: |
+          $argsList = @('scripts/release_notes.py', 'resolve')
+          if (-not [string]::IsNullOrWhiteSpace($env:REQUESTED_VERSION)) { $argsList += @('--requested', $env:REQUESTED_VERSION) }
+          if ($env:IS_TAG -eq 'true') { $argsList += @('--tag', $env:RELEASE_REF) }
+          $result = & python @argsList
+          if ($LASTEXITCODE -ne 0) { throw 'Version/tag validation failed.' }
+          $result | Add-Content $env:GITHUB_OUTPUT
+          "publish=$env:SHOULD_PUBLISH" | Add-Content $env:GITHUB_OUTPUT
+      - name: Validate publication prerequisites
+        if: steps.resolve.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-
+          CHZZK_CLIENT_SECRET: ${{ secrets.CHZZK_CLIENT_SECRET }}
+          RELEASE_VERSION: ${{ steps.resolve.outputs.version }}
         run: |
-          $tag = "v$env:RELEASE_VERSION"
-
-          gh release view $tag 2>$null
-
-          if ($LASTEXITCODE -ne 0) {
-            gh release create $tag `
-              --title "CHZZK Auto Category $env:RELEASE_VERSION" `
-              --generate-notes
+          if ([string]::IsNullOrWhiteSpace($env:CHZZK_CLIENT_SECRET)) { throw 'Set the CHZZK_CLIENT_SECRET repository Actions secret before publishing.' }
+          $releases = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Could not inspect existing releases.' }
+          foreach ($release in $releases) {
+            if ($release.draft -or $release.prerelease) { continue }
+            $version = $release.tag_name -replace '^v', ''
+            if ($version -match '^\d+\.\d+\.\d+$' -and [version]$version -ge [version]$env:RELEASE_VERSION) { throw 'The release version must be newer than every published stable release.' }
           }
-
-          gh release upload $tag `
-            "website/downloads/ChzzkAutoCategory-$env:RELEASE_VERSION.zip" `
-            "website/downloads/ChzzkAutoCategory-Setup.exe" `
-            "website/downloads/SHA256SUMS.txt" `
-            "website/downloads/latest.json" `
-            --clobber
+      - name: Prepare protected build environment
+        shell: cmd
+        run: prepare_build.bat
+      - name: Run Python regression tests
+        run: |
+          .venv/Scripts/python.exe -m unittest discover -s tests -v
+          if ($LASTEXITCODE -ne 0) { throw 'Python tests failed.' }
+      - name: Compile protected Python app
+        shell: cmd
+        env:
+          CHZZK_CLIENT_ID: ${{ vars.CHZZK_CLIENT_ID }}
+          CHZZK_CLIENT_SECRET: ${{ secrets.CHZZK_CLIENT_SECRET }}
+        run: build.bat
+      - name: Compile protected updater
+        shell: cmd
+        run: build_updater.bat
+      - name: Build the MSI and separate DTF wrappers
+        shell: cmd
+        run: installer\build_installer.bat
+      - name: Check installer state transitions
+        run: |
+          dotnet run --project installer/modern-ui/tests/StateTests.csproj --configuration Release
+          if ($LASTEXITCODE -ne 0) { throw 'Installer state tests failed.' }
+      - name: Load the actual WPF installer on Windows
+        run: |
+          dotnet build installer/modern-ui/tests/UiSmoke.csproj --configuration Release --output build/ui-smoke
+          if ($LASTEXITCODE -ne 0) { throw 'UI smoke host build failed.' }
+          & ./build/ui-smoke/UiSmoke.exe
+          if ($LASTEXITCODE -ne 0) { throw 'The actual WPF installer could not be loaded.' }
+      - name: Create MSI assets and release Markdown
+        env:
+          RELEASE_VERSION: ${{ steps.resolve.outputs.version }}
+          RELEASE_TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          .venv/Scripts/python.exe release.py --version $env:RELEASE_VERSION --tag $env:RELEASE_TAG
+          if ($LASTEXITCODE -ne 0) { throw 'Release asset creation failed.' }
+          New-Item release-assets -ItemType Directory -Force | Out-Null
+          Copy-Item "website/downloads/ChzzkAutoCategory-$env:RELEASE_VERSION.msi" release-assets/
+          Copy-Item website/downloads/SHA256SUMS.txt release-assets/
+          Copy-Item website/downloads/latest.json release-assets/
+          Copy-Item "website/downloads/RELEASE_NOTES-$env:RELEASE_VERSION.md" release-assets/
+          Copy-Item build/release-notes/CHANGELOG.md release-assets/
+      - name: Upload MSI build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CHZZK-Auto-Category-Windows-${{ steps.resolve.outputs.version }}
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload safe build diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-build-diagnostics-${{ github.run_id }}
+          if-no-files-found: ignore
+          path: |
+            build/protected/*/native-audit.json
+            build/msi/Product.wxs
+  publish:
+    needs: build
+    if: needs.build.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: chzzk-msi-release-publication
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_VERSION: ${{ needs.build.outputs.version }}
+      RELEASE_TAG: ${{ needs.build.outputs.tag }}
+      BUILD_SOURCE_SHA: ${{ github.sha }}
+    steps:
+      - name: Checkout publication helpers
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download tested MSI assets
+        uses: actions/download-artifact@v4
+        with:
+          name: CHZZK-Auto-Category-Windows-${{ needs.build.outputs.version }}
+          path: release-assets/
+      - name: Publish MSI and record CHANGELOG.md
+        shell: pwsh
+        run: ./scripts/publish_release.ps1

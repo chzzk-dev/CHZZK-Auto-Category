@@ -1,0 +1,4 @@
+-r requirements.txt
+Cython==3.3.0
+setuptools==84.0.0
+pyinstaller==6.22.3
