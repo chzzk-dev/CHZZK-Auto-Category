@@ -5,6 +5,12 @@
 
 ## 미배포
 
+- 아직 기록할 변경 사항이 없습니다.
+
+## [4.11.4](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.11.4) — 2026-10-14 (KST)
+
+### 변경 사항
+
 - 새 버전을 main에 업로드하면 Windows 검증 후 MSI와 변경 기록을 GitHub Release에 자동 게시합니다.
 - 자동 감지 대기 목록에 새 게임이 추가되면 알림음을 재생합니다. 같은 게임의 반복 감지와 LoL 대기실·게임 전환에는 중복 재생하지 않습니다.
 - 설정에서 대기 목록 알림음을 켜거나 끌 수 있습니다. 기존 사용자도 기본으로 활성화됩니다.
@@ -13,6 +19,24 @@
 - UI와 Custom Action DLL을 분리하고 설치 화면 초기화 진단을 보완했습니다.
 - Windows CI에서 설치 UI 로딩과 네이티브 래퍼·MSI 빌드를 검사합니다.
 - 릴리스 변경 기록을 MD 파일과 GitHub 릴리스 설명에 자동으로 남깁니다.
+
+### 커밋
+
+- ci: publish new MSI versions automatically after successful main builds ([565451f](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/565451f0779a7a00488483c02742dd3b33d2eac1))
+- feat: play an alert once when detected games enter the pending list ([610a2c2](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/610a2c2fc8b66250ab618ff32d84d560cdd3ce6e))
+- Remove outdated information from README.md ([ecde489](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/ecde489d87c49dad391cf147f1e8400eb79caea1))
+- fix: read both CHZZK build credentials from Actions secrets ([f92f4a0](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/f92f4a0960ae96e6f14328f8bfa297b5f9f7285a))
+- Update chzzk_open.py ([13a45da](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/13a45dac15665a738647947395e8acf55d291f1e))
+- test: compare resolved native paths in Windows MSI checks ([4e58f94](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/4e58f9458a48edd51296f5c92870731055a2a575))
+- feat: add 4.11.4 MSI source, Windows CI, and automatic release Markdown ([c206ab6](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/c206ab651899012c68b86e8b836e1e5482a358cb))
+
+[전체 변경 비교](https://github.com/chzzk-dev/CHZZK-Auto-Category/compare/4.11.3...v4.11.4)
+
+### 설치 파일
+
+- `ChzzkAutoCategory-4.11.4.msi`
+- `SHA256SUMS.txt`에서 설치 파일의 SHA-256을 확인할 수 있습니다.
+- 기존 MSI 설치본은 새 MSI로 업그레이드하며 사용자 설정을 유지합니다.
 
 ## 이전 배포
 
