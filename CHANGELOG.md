@@ -5,11 +5,30 @@
 
 ## 미배포
 
+- 아직 기록할 변경 사항이 없습니다.
+
+## [4.12.5](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.5) — 2026-10-15 (KST)
+
+### 변경 사항
+
 - 데스크톱 기본 창을 1440×960으로 확대하고 대시보드 카드 간격과 비율을 정리합니다.
 - 자동화·프로그램 설정을 2열 카드와 왼쪽 설명/오른쪽 컨트롤 구조로 개편합니다.
 - 체크박스를 키보드 조작을 지원하는 좌우 토글로 바꾸고 버튼·선택창·스크롤바 스타일을 통일합니다.
 - 설정 저장 버튼을 화면 하단에 고정해 스크롤 위치와 관계없이 저장할 수 있게 합니다.
 - 공식 API를 필수 사용으로 고정하고 빌드 인증 정보로 앱 시작 시 연결 상태를 자동 확인합니다. 인증 정보가 없는 빌드는 상태를 명확히 안내합니다.
+
+### 커밋
+
+- Isolate official API UI test logging to permit Windows temporary-profile cleanup ([c25ca5f](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/c25ca5f98ce818e046b41eaafb8ea65e555b0762))
+- Refresh settings with accessible toggles and automatic official API setup in 4.12.5 ([402629e](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/402629e78784a63aa147703f462b0c913fcaa61e))
+
+[전체 변경 비교](https://github.com/chzzk-dev/CHZZK-Auto-Category/compare/v4.12.4...v4.12.5)
+
+### 설치 파일
+
+- `ChzzkAutoCategory-4.12.5.msi`
+- `SHA256SUMS.txt`에서 설치 파일의 SHA-256을 확인할 수 있습니다.
+- 기존 MSI 설치본은 새 MSI로 업그레이드하며 사용자 설정을 유지합니다.
 
 ## [4.12.4](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.4) — 2026-10-15 (KST)
 
