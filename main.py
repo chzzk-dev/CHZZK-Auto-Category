@@ -1128,7 +1128,7 @@ class ExistingWindow(QMainWindow):
         note.setObjectName('sectionInfo')
         tools.addWidget(note)
         tools.addStretch(1)
-        tools.addWidget(button('로그 복사', lambda: QApplication.clipboard().setText(self.log.toPlainText())))
+        tools.addWidget(button('로그 복사', self.copy_logs))
         tools.addWidget(button('화면 지우기', self.clear_logs))
         layout.addLayout(tools)
         self.log = QTextEdit()
@@ -1734,6 +1734,9 @@ class ExistingWindow(QMainWindow):
             show_info(self, '설정 필요', '계정과 게임 연결을 먼저 저장해 주세요.')
             return
         self.worker.submit('enable', not self.enabled)
+
+    def copy_logs(self):
+        QApplication.clipboard().setText(self.log.toPlainText())
 
     def clear_logs(self):
         self.log.clear()

@@ -1065,13 +1065,21 @@ class ModernWindowMixin:
             from diagnostics import record_log
             record_log(text)
 
-    def render_logs(self):
-        from html import escape
+    def visible_log_entries(self):
         selected = self.log_filter.currentText()
         entries = list(self.log_entries)
         if self.log_details.isChecked():
             entries = sorted([*entries, *self.log_detail_entries], key=lambda entry: entry[3])[-1000:]
-        rows = [(t, k, s) for t, k, s, sequence in entries if selected == '전체' or k == selected]
+        return [(t, k, s) for t, k, s, sequence in entries if selected == '전체' or k == selected]
+
+    def copy_logs(self):
+        if not hasattr(self, 'log_entries'):
+            return super().copy_logs()
+        QApplication.clipboard().setText('\n'.join(f'{t}  [{k}] {s}' for t, k, s in self.visible_log_entries()))
+
+    def render_logs(self):
+        from html import escape
+        rows = self.visible_log_entries()
         scrollbar = self.log.verticalScrollBar()
         position = scrollbar.value()
         at_bottom = position >= scrollbar.maximum() - 4
