@@ -235,7 +235,7 @@ class ModernUiTests(unittest.TestCase):
     def test_official_connection_is_checked_once_automatically(self):
         w = self.window
         w.preview = False
-        with patch.object(w.worker, 'submit') as submit:
+        with patch.object(w.worker, 'submit') as submit, patch('diagnostics.record_log'):
             for _ in range(2):
                 w.on_event({'kind': 'checked', 'text': '연결 성공', 'category_name': 'talk'})
         self.assertEqual(sum(call.args[0] == 'chzzk_open_test' for call in submit.call_args_list), 1)
