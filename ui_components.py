@@ -6,6 +6,8 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QFileDialog,
+    QDialogButtonBox,
     QDialog,
     QFrame,
     QGraphicsDropShadowEffect,
@@ -282,3 +284,50 @@ class SettingsComboBox(QComboBox):
         x, y = self.width() - 16, self.height() // 2
         painter.drawLine(QPoint(x - 4, y - 2), QPoint(x, y + 2))
         painter.drawLine(QPoint(x, y + 2), QPoint(x + 4, y - 2))
+
+
+class FramelessDialog(QDialog):
+    """Common borderless subwindow; Escape and an in-window close remain available."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+        self.setObjectName('subDialog')
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self._drag_offset = None
+
+    def showEvent(self, event):
+        if not any('닫기' in b.text() or b.toolTip() == '닫기' for b in self.findChildren(QPushButton)):
+            close = QPushButton('닫기', self)
+            close.setIcon(app_icon('close'))
+            close.clicked.connect(self.reject)
+            if self.layout() is None:
+                QVBoxLayout(self)
+            self.layout().addWidget(close)
+        super().showEvent(event)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and event.position().y() < 48:
+            self._drag_offset = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._drag_offset is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            self.move(event.globalPosition().toPoint() - self._drag_offset)
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_offset = None
+        super().mouseReleaseEvent(event)
+
+
+def choose_executable(parent):
+    dialog = QFileDialog(parent, '게임 실행 파일', '', 'Windows 실행 파일 (*.exe)')
+    dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+    dialog.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+    dialog.setObjectName('subDialog')
+    dialog.setFileMode(QFileDialog.FileMode.ExistingFile)
+    dialog.setLabelText(QFileDialog.DialogLabel.Reject, '닫기')
+    result = dialog.exec()
+    files = dialog.selectedFiles() if result == QDialog.DialogCode.Accepted else []
+    dialog.deleteLater()
+    return files[0] if files else ''

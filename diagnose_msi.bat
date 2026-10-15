@@ -3,9 +3,9 @@ setlocal EnableExtensions
 chcp 65001 >nul
 cd /d "%~dp0"
 set "CHZZK_MSI_PATH=%~1"
-if not defined CHZZK_MSI_PATH if exist "dist-installer\ChzzkAutoCategory-4.12.5.msi" set "CHZZK_MSI_PATH=%CD%\dist-installer\ChzzkAutoCategory-4.12.5.msi"
-if not defined CHZZK_MSI_PATH if exist "website\downloads\ChzzkAutoCategory-4.12.5.msi" set "CHZZK_MSI_PATH=%CD%\website\downloads\ChzzkAutoCategory-4.12.5.msi"
-if not defined CHZZK_MSI_PATH if exist "ChzzkAutoCategory-4.12.5.msi" set "CHZZK_MSI_PATH=%CD%\ChzzkAutoCategory-4.12.5.msi"
+if not defined CHZZK_MSI_PATH if exist "dist-installer\ChzzkAutoCategory-4.12.6.msi" set "CHZZK_MSI_PATH=%CD%\dist-installer\ChzzkAutoCategory-4.12.6.msi"
+if not defined CHZZK_MSI_PATH if exist "website\downloads\ChzzkAutoCategory-4.12.6.msi" set "CHZZK_MSI_PATH=%CD%\website\downloads\ChzzkAutoCategory-4.12.6.msi"
+if not defined CHZZK_MSI_PATH if exist "ChzzkAutoCategory-4.12.6.msi" set "CHZZK_MSI_PATH=%CD%\ChzzkAutoCategory-4.12.6.msi"
 if not defined CHZZK_MSI_PATH goto missing
 if not exist "%CHZZK_MSI_PATH%" goto missing
 set "CHZZK_MSI_LOG=%TEMP%\chzzk-msi-%RANDOM%-%RANDOM%.log"

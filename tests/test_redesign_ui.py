@@ -241,6 +241,69 @@ class ModernUiTests(unittest.TestCase):
         self.assertEqual(sum(call.args[0] == 'chzzk_open_test' for call in submit.call_args_list), 1)
         w.preview = True
 
+    def test_all_game_subwindows_are_frameless_and_have_close(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QVBoxLayout, QLabel, QPushButton
+        from ui_components import FramelessDialog
+        from main import RuleDialog, CategoryChoiceDialog
+        w = self.window
+        generic = FramelessDialog(w)
+        QVBoxLayout(generic).addWidget(QLabel('내용'))
+        dialogs = [generic, RuleDialog(w), CategoryChoiceDialog(w, 'game.exe', 'Game',
+                    [{'categoryId': 'one', 'categoryValue': 'One'}, {'categoryId': 'two', 'categoryValue': 'Two'}])]
+        for dlg in dialogs:
+            dlg.show()
+            self.app.processEvents()
+            self.assertTrue(dlg.windowFlags() & Qt.WindowType.FramelessWindowHint)
+            self.assertTrue(any('닫기' in b.text() for b in dlg.findChildren(QPushButton)))
+            dlg.reject()
+            dlg.deleteLater()
+
+    def test_first_league_prompt_is_simple_and_closes_when_game_exits(self):
+        from PySide6.QtCore import QTimer, Qt
+        from PySide6.QtWidgets import QDialog, QPushButton, QLineEdit
+        w = self.window
+        w.league_session_token = 'session'
+        observed = []
+        def inspect():
+            dlg = QApplication.activeModalWidget()
+            observed.append(bool(dlg.windowFlags() & Qt.WindowType.FramelessWindowHint))
+            observed.append({b.text() for b in dlg.findChildren(QPushButton) if b.isVisible()} == {'롤', '롤토체스', '닫기'})
+            observed.append(not any(e.isVisible() for e in dlg.findChildren(QLineEdit)))
+            w.on_event({'kind': 'league_session_ended', 'session': 'session'})
+        QTimer.singleShot(0, inspect)
+        w.prompt_league_mode({'session': 'session', 'process': 'LeagueClient.exe'})
+        self.assertEqual(observed, [True, True, True])
+        self.assertIsNone(w.league_session_token)
+        self.assertIsNone(w.active_league_dialog)
+        self.assertEqual(w.quick_rule_callbacks, {})
+
+    def test_explicit_mode_choice_confirms_current_session_only(self):
+        from dataclasses import asdict
+        w = self.window
+        rule = Rule('LeagueClient.exe', 'tft', '전략적 팀 전투', game_name='Teamfight Tactics')
+        w.league_session_token = 'new-session'
+        with patch.object(w.worker, 'submit') as submit:
+            w.confirm_league_selection(rule)
+            submit.assert_called_once_with('confirm_league_mode', {'session': 'new-session', 'rule': asdict(rule)})
+            with patch.object(w, 'show_game_details') as show:
+                w.prompt_league_mode({'session': 'new-session', 'process': 'LeagueClient.exe'})
+                show.assert_not_called()
+
+    def test_file_picker_is_non_native_and_has_no_os_title_bar(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QFileDialog
+        from ui_components import choose_executable
+        checked = []
+        def inspect(dlg):
+            checked.append(dlg.testOption(QFileDialog.Option.DontUseNativeDialog))
+            checked.append(bool(dlg.windowFlags() & Qt.WindowType.FramelessWindowHint))
+            checked.append(dlg.labelText(QFileDialog.DialogLabel.Reject) == '닫기')
+            return QFileDialog.DialogCode.Rejected
+        with patch.object(QFileDialog, 'exec', inspect):
+            self.assertEqual(choose_executable(self.window), '')
+        self.assertEqual(checked, [True, True, True])
+
 
 if __name__ == '__main__':
     unittest.main()

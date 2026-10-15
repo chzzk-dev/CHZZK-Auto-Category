@@ -216,16 +216,19 @@ class WorkerSafetyTests(unittest.TestCase):
         with patch.object(self.worker.mapper, 'ensure_index', return_value={}), patch('worker.snapshot_process_names', return_value=['League of Legends.exe']):
             self.worker.last_auto_sync = 0
             self.worker.scan()
+            self.worker.api.apply.assert_not_called()
+            self.worker.command('confirm_league_mode', {'session': self.worker.league_session_token, 'rule': asdict(tft)})
+            self.worker.scan()
         self.worker.api.apply.assert_called_once()
         self.assertEqual(self.worker.api.apply.call_args.args[0].category_id, 'Teamfight_Tactics')
 
-    def test_lol_mode_pending_is_not_deleted_and_readded_each_scan(self):
+    def test_lol_mode_prompt_is_not_recreated_or_logged_each_scan(self):
         self.worker.mapper.entries = with_game_client_compatibility({})
         self.worker.api.search.return_value = [category('League_of_Legends', '리그 오브 레전드')]
         with patch.object(self.worker.mapper, 'ensure_index', return_value={}), patch('worker.snapshot_process_names', return_value=['LeagueClient.exe']):
             self.worker.scan()
             pending = list(self.worker.config['auto_pending'])
-            self.assertTrue(any(p.get('reason') == 'multi-game' for p in pending))
+            self.assertEqual(sum(e['kind'] == 'league_mode_required' for e in self.events), 1)
             self.events.clear()
             for _ in range(4):
                 self.assertFalse(self.worker.sanitize_auto_state())
@@ -239,6 +242,47 @@ class WorkerSafetyTests(unittest.TestCase):
             self.worker.last_auto_sync = 0
             self.worker.scan()
         self.assertEqual(self.worker.config['auto_pending'], [])
+
+    def test_league_prompt_is_once_per_client_session_and_blocks_previous_manual_rule(self):
+        rule = Rule('LeagueClient.exe', 'lol', '리그 오브 레전드', game_name='League of Legends', process_aliases=('League of Legends.exe',))
+        self.worker.config['rules'] = [asdict(rule)]
+        names = ['LeagueClient.exe']
+        with patch('worker.snapshot_process_names', side_effect=lambda: list(names)), patch.object(self.worker.mapper, 'ensure_index', return_value={}):
+            self.worker.scan()
+            first = self.worker.league_session_token
+            self.assertTrue(first)
+            self.worker.api.apply.assert_not_called()
+            self.worker.scan()
+            names[:] = ['LeagueClient.exe', 'League of Legends.exe']
+            self.worker.scan()
+            self.assertEqual(sum(e['kind'] == 'league_mode_required' for e in self.events), 1)
+            self.worker.command('confirm_league_mode', {'session': first, 'rule': asdict(rule)})
+            self.assertEqual(self.worker.league_confirmed_key, rule.key)
+            self.worker.command('configure', dict(self.worker.config))
+            self.assertEqual(self.worker.league_session_token, first)
+            self.assertEqual(self.worker.league_confirmed_key, rule.key)
+            names.clear()
+            self.worker.refresh_processes(force=True)
+            self.assertIsNone(self.worker.league_session_token)
+            names[:] = ['LeagueClient.exe']
+            self.worker.refresh_processes(force=True)
+            self.assertNotEqual(self.worker.league_session_token, first)
+            self.assertIsNone(self.worker.league_confirmed_key)
+            self.assertEqual(sum(e['kind'] == 'league_mode_required' for e in self.events), 2)
+
+    def test_late_quick_mode_search_is_discarded_after_game_exit(self):
+        names = ['LeagueClient.exe']
+        def search(*_):
+            names.clear()
+            return [category('tft', '전략적 팀 전투 : 신비의 숲')]
+        self.worker.api.search.side_effect = search
+        with patch('worker.snapshot_process_names', side_effect=lambda: list(names)):
+            self.worker.refresh_processes(force=True)
+            token = self.worker.league_session_token
+            self.worker.command('quick_game_mode', {'token': 'query', 'session': token, 'process': 'LeagueClient.exe', 'game': 'Teamfight Tactics'})
+        self.assertFalse(any(e['kind'] == 'quick_rule_ready' for e in self.events))
+        self.assertTrue(any(e['kind'] == 'quick_rule_error' for e in self.events))
+        self.worker.api.apply.assert_not_called()
 
     def test_quick_tft_selection_uses_verified_api_id_and_shared_executables(self):
         self.worker.api.search.return_value = [category('actual-tft-id', '전략적 팀 전투')]

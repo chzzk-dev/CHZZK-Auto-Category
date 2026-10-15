@@ -94,6 +94,7 @@ def normalize_config(value):
     config['bridge_port'] = max(1024, min(65535, int(config.get('bridge_port', 5000))))
     config['extension_id'] = str(config.get('extension_id') or WEBSTORE_EXTENSION_ID).strip().lower()
     config['chzzk_open_enabled'] = True
+    config['league_mode'] = 'ask'
     config.pop('chzzk_client_id', None)
     config.pop('chzzk_client_secret', None)
 

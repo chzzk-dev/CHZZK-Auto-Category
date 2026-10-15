@@ -95,7 +95,7 @@ class FirstRunSetup(QDialog):
         self.error.setWordWrap(True)
         outer.addWidget(self.error)
         actions = QHBoxLayout()
-        cancel = QPushButton('종료 · 다음에 설정')
+        cancel = QPushButton('닫기 · 다음에 설정')
         cancel.clicked.connect(self.reject)
         self.back = QPushButton('이전')
         self.back.clicked.connect(lambda: self.show_page(self.pages.currentIndex() - 1))

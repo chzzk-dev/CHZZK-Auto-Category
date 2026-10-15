@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (QApplication, QAbstractItemView, QCheckBox, QComb
     QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem, QMainWindow,
     QPushButton, QSpinBox, QStyle, QSystemTrayIcon, QStackedWidget, QTableWidget,
     QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget, QFrame, QGraphicsOpacityEffect, QScrollArea, QGridLayout, QSizeGrip, QGraphicsDropShadowEffect)
-from ui_components import SettingsComboBox as QComboBox
+from ui_components import SettingsComboBox as QComboBox, FramelessDialog as QDialog, choose_executable
 from core import Rule, channel_id
 from storage import (data_dir, load_config, save_config, set_windows_autostart,
                      ensure_start_menu_shortcut)
@@ -82,7 +82,7 @@ def button(text, callback, primary=False):
     result = QPushButton(text)
     if primary:
         result.setObjectName('primary')
-    set_button_icon(result, next((name for key, name in (('삭제', 'delete'), ('수정', 'edit'), ('검색', 'search'), ('확인', 'refresh'), ('설정', 'settings'), ('저장', 'success'), ('연결', 'connections'), ('트레이', 'tray'), ('로그', 'logs'), ('위로', 'up'), ('아래로', 'down'), ('업데이트', 'download')) if key in text), 'info'), '#FFFFFF' if primary else '#252525')
+    set_button_icon(result, next((name for key, name in (('닫기', 'close'), ('취소', 'close'), ('삭제', 'delete'), ('수정', 'edit'), ('검색', 'search'), ('확인', 'refresh'), ('설정', 'settings'), ('저장', 'success'), ('연결', 'connections'), ('트레이', 'tray'), ('로그', 'logs'), ('위로', 'up'), ('아래로', 'down'), ('업데이트', 'download')) if key in text), 'info'), '#FFFFFF' if primary else '#252525')
     result.clicked.connect(callback)
     return result
 
@@ -464,7 +464,8 @@ class RuleDialog(QDialog):
         layout.addWidget(self.note)
         controls = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         controls.button(QDialogButtonBox.StandardButton.Save).setText('규칙 저장')
-        controls.button(QDialogButtonBox.StandardButton.Cancel).setText('취소')
+        controls.button(QDialogButtonBox.StandardButton.Cancel).setText('닫기')
+        set_button_icon(controls.button(QDialogButtonBox.StandardButton.Cancel), 'close')
         controls.accepted.connect(self.save)
         controls.rejected.connect(self.reject)
         layout.addWidget(controls)
@@ -486,7 +487,7 @@ class RuleDialog(QDialog):
         self.worker.event.disconnect(self.on_event)
 
     def browse(self):
-        path, _ = QFileDialog.getOpenFileName(self, '게임 실행 파일', '', 'Windows 실행 파일 (*.exe)')
+        path = choose_executable(self)
         if path:
             self.process.setEditText(Path(path).name)
             self.prefill_keyword_from_process(Path(path).name)
@@ -668,7 +669,7 @@ class CategoryChoiceDialog(QDialog):
 
         buttons = QHBoxLayout()
         buttons.setSpacing(8)
-        buttons.addWidget(button('취소', self.reject))
+        buttons.addWidget(button('닫기', self.reject))
         buttons.addStretch(1)
         once = button('이번만 적용', self.accept_once)
         saved = button('선택하고 규칙 저장', self.accept_saved, True)
@@ -1402,6 +1403,7 @@ class ExistingWindow(QMainWindow):
             index = -1
 
         dlg = RuleDialog(self, None if new else self.rules[index])
+        saved = False
         if dlg.exec() == QDialog.DialogCode.Accepted:
             old = list(self.rules)
             all_rules = self.rules + self.auto_rules
@@ -1417,9 +1419,12 @@ class ExistingWindow(QMainWindow):
                 selected_index = index
             if not self.persist():
                 self.rules = old
+            else:
+                saved = True
             self.refresh_table()
             self.select_rule_location('manual', selected_index)
         dlg.deleteLater()
+        return dlg.result_rule if saved else None
 
     def remove_rule(self):
         location = self.selected_rule_location()

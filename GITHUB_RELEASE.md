@@ -2,7 +2,7 @@
 
 배포 저장소는 https://github.com/chzzk-dev/CHZZK-Auto-Category 입니다. `.github/workflows/windows-release.yml`을 사용합니다.
 
-현재 소스는 앱 4.12.5 / 확장프로그램 0.6.0입니다. 사용자 승인에 따라 정식 최신 릴리스로 게시합니다. 모든 Windows 검증 게이트가 통과해야 게시됩니다.
+현재 소스는 앱 4.12.6 / 확장프로그램 0.6.0입니다. 사용자 승인에 따라 정식 최신 릴리스로 게시합니다. 모든 Windows 검증 게이트가 통과해야 게시됩니다.
 
 ## 최초 설정
 

@@ -7,6 +7,7 @@ TOKENS = dict(background='#F3F1EB', card='#323232', sidebar='#252525',
 
 STYLE = """
 QWidget { font-family:"Segoe UI", "Malgun Gothic", "Noto Sans CJK KR"; font-size:13px; color:@text; }
+QDialog#subDialog { background:@background; border:3px solid white; border-radius:18px; }
 QMainWindow#appWindow, QWidget#windowRoot { background:transparent; }
 QFrame#shell { background:@background; border:5px solid white; border-radius:22px; }
 QFrame#titleBar { background:@background; border:none; border-top-left-radius:18px; border-top-right-radius:18px; }
