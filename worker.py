@@ -1,4 +1,5 @@
 import queue
+import os
 import threading
 import time
 import uuid
@@ -9,7 +10,8 @@ from autodetect import (DiscordAutoMapper, serialize_rules, cleanup_auto_mapping
                         is_ignored_process, detectable_running_processes, game_process_details,
                         category_choice_process_key, league_rule_processes)
 from process_detect import process_names as snapshot_process_names
-from storage import discord_cache_file, data_dir
+from storage import discord_cache_file, data_dir, get_steam_api_key, save_steam_api_key
+from steam_lookup import SteamResolver, SteamLookupError, valid_key
 from automation import MatchingPipeline, VerifiedCache, choose_representative
 from datetime import datetime
 from dataclasses import asdict
@@ -47,6 +49,8 @@ class Worker(QThread):
         self.last_catalog_sync = 0.0
         self.latest_snapshot = None
         self.snapshot_thread = None
+        self.steam = None
+        self.last_steam_error = ''
         self.mapper = DiscordAutoMapper(
             discord_cache_file(),
             int(self.config.get('discord_refresh_hours', 24)) * 3600,
@@ -72,11 +76,40 @@ class Worker(QThread):
         self.mapper.category_ttl = max(1, int(self.config.get('category_sync_hours', 6))) * 3600
         self.mapper.cancelled = self.cancel.is_set
         self.mapper.observer = self.observe_matching
+        key = get_steam_api_key() if self.config.get('steam_lookup_enabled', True) else ''
+        if self.steam is None or self.steam.key != key:
+            if self.steam is not None:
+                self.steam.close()
+            self.steam = SteamResolver(key, discord_cache_file().parent / 'steam_titles.json',
+                                       cancelled=self.cancel.is_set)
+        self.mapper.enrich_game = self.enrich_steam_game
+
+    def enrich_steam_game(self, game, process):
+        if not self.steam.configured:
+            return game
+        self.observe_matching(game, process, '분석 중')
+        record = self.steam.resolve(game, process)
+        if self.steam.last_error and self.steam.last_error != self.last_steam_error:
+            self.emit('log', text='[카테고리 검색] ' + self.steam.last_error)
+        self.last_steam_error = self.steam.last_error
+        if record:
+            title = record['localized_name']
+            game = dict(game, steam_appid=record['appid'])
+            if any('\uac00' <= c <= '\ud7a3' for c in title):
+                game['steam_name_ko'] = title
+                game['aliases'] = list(dict.fromkeys([title, *game.get('aliases', [])]))
+            self.emit('steam_status', text=f"{title} · App ID {record['appid']} · 이름 검증 완료")
+        else:
+            self.emit('steam_status', text=self.steam.last_error or '정확한 Steam 게임을 찾지 못해 기존 매칭을 사용합니다.')
+        return game
 
     def observe_matching(self, game, process, stage, **fields):
         # Observe per-game state; no search results are shared across game identities.
         old = self.pipeline.states.get(str(game.get('id') or __import__('normalization').normalized_name(game.get('name')) or process.casefold()))
         previous = old.stage if old else None
+        fields.update(steam_appid=int(game.get('steam_appid') or 0),
+                      localized_name=game.get('steam_name_ko', ''),
+                      detection_source='Discord + Steam' if game.get('steam_appid') else 'Discord 게임 목록')
         self.pipeline.transition(game, process, stage, **fields)
         if stage != previous:
             self.emit('log', text=f"[카테고리 검색] {game.get('name') or process} · {process} · {stage}")
@@ -624,6 +657,42 @@ class Worker(QThread):
             data = self.mapper._cached_search(value['keyword'], lambda query: self.client().search(query, self.chzzk_open))
             self.emit('search', request=value['request'], data=data,
                       official=bool(self.chzzk_open and self.chzzk_open.configured))
+        elif name == 'steam_test':
+            try:
+                key = str((value or {}).get('key') or '').strip()
+                if key:
+                    if not valid_key(key):
+                        raise SteamLookupError('32자리 Steam Web API 키를 입력해 주세요.')
+                    if os.environ.get('STEAM_WEB_API_KEY', '').strip() not in ('', key):
+                        raise SteamLookupError('STEAM_WEB_API_KEY 환경변수 키가 우선합니다. 입력란을 비워 연결을 확인하거나 환경변수 키를 변경해 주세요.')
+                    probe = SteamResolver(key, discord_cache_file().parent / 'steam_titles.json',
+                                          cancelled=self.cancel.is_set)
+                    try:
+                        probe.test_connection()
+                    finally:
+                        probe.close()
+                    save_steam_api_key(key)
+                self.configure_mapper()
+                if key:
+                    pass  # The candidate was checked before replacing the saved key.
+                elif self.steam.configured:
+                    self.steam.test_connection()
+                else:
+                    probe = SteamResolver(get_steam_api_key(), discord_cache_file().parent / 'steam_titles.json',
+                                          cancelled=self.cancel.is_set)
+                    try:
+                        probe.test_connection()
+                    finally:
+                        probe.close()
+                suffix = '한국어 이름 조회 사용' if self.config.get('steam_lookup_enabled', True) else '자동 조회는 꺼져 있습니다'
+                self.emit('steam_status', text='Steam API 연결 확인 완료 · ' + suffix, ok=True)
+                self.last_auto_sync = 0
+            except (SteamLookupError, OSError, RuntimeError) as error:
+                self.emit('steam_status', text=str(error), ok=False)
+        elif name == 'steam_forget':
+            save_steam_api_key('')
+            self.configure_mapper()
+            self.emit('steam_status', text='저장된 Steam API 키를 삭제했습니다. 환경변수 키가 있으면 계속 사용합니다.')
         elif name == 'chzzk_open_test':
             if self.chzzk_open is None or not self.chzzk_open.configured:
                 raise ChzzkOpenAPIError('공식 API 인증 정보가 포함되지 않은 빌드입니다. 최신 공식 설치본을 설치해 주세요.')
@@ -756,3 +825,5 @@ class Worker(QThread):
             self.drop_client()
             if self.chzzk_open is not None:
                 self.chzzk_open.close()
+            if self.steam is not None:
+                self.steam.close()

@@ -669,6 +669,7 @@ class DiscordAutoMapper:
         self.cancelled = lambda: False
         self.last_search_error = ''
         self._game_failures = {}
+        self.enrich_game = None
 
     def load_cache(self):
         if self._loaded:
@@ -853,6 +854,12 @@ class DiscordAutoMapper:
                     item['_discordName'] = str(item.get('_discordName') or game_name)
                     ranked_by_key[key] = {'score': score, 'identity': identity, 'category': item}
 
+            if (game.get('steam_appid') and contains_hangul(keyword)
+                    and normalize_name(keyword) == normalize_name(game.get('steam_name_ko'))
+                    and any(exact_category_identity(item['category'], [keyword])
+                            for item in ranked_by_key.values())):
+                break
+
         ranked = sorted(
             ranked_by_key.values(),
             key=lambda item: (
@@ -876,6 +883,10 @@ class DiscordAutoMapper:
 
     def _match_game(self, game, process, search):
         game = dict(game)
+        if self.enrich_game:
+            game = self.enrich_game(game, process)
+        if self.cancelled():
+            return None
         game['aliases'] = list(dict.fromkeys([*game.get('aliases', []), *self.user_aliases.get(game.get('name', ''), [])]))
         fingerprint = json.dumps([game.get('name'), game.get('id'), game.get('aliases')], ensure_ascii=False, sort_keys=True)
         key = game_key(game, process)
@@ -888,7 +899,7 @@ class DiscordAutoMapper:
                 category = dict(cached['category'], _verifiedAt=cached['verified_at'])
                 if self.observer:
                     self.observer(game, process, '검증 중')
-                return {'category': category, 'score': 600, 'confident': True, 'count': 1,
+                return {'game': game, 'category': category, 'score': 600, 'confident': True, 'count': 1,
                         'ambiguous': False, 'candidates': [category]}
         if self.observer:
             self.observer(game, process, '검색 중')
@@ -946,6 +957,7 @@ class DiscordAutoMapper:
             top['category']['_autoResolvedLocalized'] = True
 
         return {
+            'game': game,
             'category': top['category'],
             'score': top['score'],
             'margin': margin,
@@ -980,7 +992,7 @@ class DiscordAutoMapper:
             for game in options[:8]:
                 match = self._match_game(game, basename, lambda keyword: self._cached_search(keyword, search))
                 if match:
-                    matches.append((game, match))
+                    matches.append((match.get('game', game), match))
 
             if not matches:
                 game = options[0]
@@ -1049,12 +1061,16 @@ class DiscordAutoMapper:
                 self.observer(selected_game, basename, '연결 완료', category_id=selected['categoryId'], category_name=selected['categoryValue'], confidence_label=f"명칭/별칭 검증 완료 · 점수 {selected_match['score']}", verified_at=__import__('datetime').datetime.now().isoformat(timespec='seconds'))
             source = str(selected.get('_matchSource') or '').strip() or 'Discord 자동 감지'
             game_name = str(selected_game.get('name') or selected.get('_discordName') or '').strip()
+            korean = selected_game.get('steam_name_ko', '')
+            localized = bool(korean and exact_category_identity(selected, [korean]))
+            if localized:
+                source = f"Steam App ID {selected_game['steam_appid']} 한국어 매칭 · {source}"
             rule = Rule(
                 basename,
                 selected['categoryId'],
                 selected['categoryValue'],
                 selected.get('categoryType', 'GAME'),
-                game_name,
+                korean if localized else game_name,
                 source,
             )
             related_processes = [p for p in processes

@@ -33,6 +33,9 @@ class GameState:
     error: str = ''
     processes: tuple = ()
     discord_name: str = ''
+    steam_appid: int = 0
+    localized_name: str = ''
+    detection_source: str = 'Discord 게임 목록'
 
 
 class VerifiedCache:

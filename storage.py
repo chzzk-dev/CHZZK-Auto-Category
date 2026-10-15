@@ -52,6 +52,7 @@ DEFAULT_CONFIG = {
     'close_to_tray': True,
     'minimize_to_tray': True,
     'detailed_logs': True,
+    'steam_lookup_enabled': True,
 }
 
 
@@ -97,6 +98,8 @@ def normalize_config(value):
     config['league_mode'] = 'ask'
     config.pop('chzzk_client_id', None)
     config.pop('chzzk_client_secret', None)
+    config.pop('steam_api_key', None)
+    config['steam_lookup_enabled'] = bool(config.get('steam_lookup_enabled', True))
 
     for key in ('rules', 'auto_rules', 'auto_pending'):
         if not isinstance(config.get(key), list):
@@ -227,6 +230,33 @@ def installed_executable():
     if sys.platform != 'win32' or not getattr(sys, 'frozen', False):
         return None
     return Path(sys.executable).resolve()
+
+
+def save_steam_api_key(value):
+    path = data_dir() / 'steam_key.dat'
+    value = str(value or '').strip()
+    if not value:
+        path.unlink(missing_ok=True)
+        return
+    if sys.platform != 'win32':
+        raise RuntimeError('Steam API 키 보호 저장은 Windows에서 지원합니다.')
+    protected = base64.b64encode(_dpapi_protect(value.encode('utf-8')))
+    temp = path.with_suffix('.tmp')
+    temp.write_bytes(protected)
+    temp.replace(path)
+
+
+def get_steam_api_key():
+    value = os.environ.get('STEAM_WEB_API_KEY', '').strip()
+    if value:
+        return value
+    if sys.platform != 'win32':
+        return ''
+    try:
+        protected = base64.b64decode((data_dir() / 'steam_key.dat').read_bytes())
+        return _dpapi_unprotect(protected).decode('utf-8').strip()
+    except (OSError, ValueError, UnicodeError):
+        return ''
 
 
 def autostart_command(executable=None):

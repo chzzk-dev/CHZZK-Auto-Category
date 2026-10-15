@@ -49,6 +49,23 @@ class ModernUiTests(unittest.TestCase):
         for i in range(6):
             self.assertFalse(self.window.nav.item(i).icon().isNull())
 
+    def test_steam_key_is_masked_and_sent_to_worker_without_config_storage(self):
+        from PySide6.QtWidgets import QLineEdit
+        w = self.window
+        self.assertEqual(w.steam_key_input.echoMode(), QLineEdit.EchoMode.Password)
+        w.steam_key_input.setText('test-invalid')
+        with patch.object(w.worker, 'submit') as submit:
+            w.save_steam_connection()
+            submit.assert_not_called()
+        w.steam_key_input.setText('a'*32)
+        with patch.object(w, 'persist', return_value=True), patch.object(w.worker, 'submit') as submit:
+            w.save_steam_connection()
+            submit.assert_called_once_with('steam_test', {'key': 'a'*32})
+        self.assertEqual(w.steam_key_input.text(), '')
+        self.assertNotIn('steam_api_key', w.config)
+        w.on_event({'kind': 'steam_status', 'ok': False, 'text': 'Steam API 인증을 확인해 주세요.'})
+        self.assertIn('인증', w.steam_status.text())
+
     def test_model_table_filters_and_priority_selection(self):
         w = self.window
         w.rules = [Rule('Manual.exe', 'manual', '수동 게임', game_name='Manual')]

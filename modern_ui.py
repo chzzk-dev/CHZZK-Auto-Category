@@ -14,7 +14,7 @@ from app_icons import app_icon, set_button_icon
 from core import Rule
 from normalization import normalized_name, alias_conflicts
 from scheduling import HOUR_OPTIONS
-from storage import save_config
+from storage import save_config, get_steam_api_key
 from theme import TOKENS
 from ui_components import ToggleSwitch, SettingsComboBox as QComboBox, FramelessDialog as QDialog
 from version import APP_VERSION
@@ -55,10 +55,15 @@ def run_packaged_ui_smoke(destination):
                 w.nav.setCurrentRow(i)
                 app.processEvents()
                 assert w.grab().save(str(destination / f'page-{i}.png'))
-            native = [name for name in ('main', 'modern_ui', 'app_icons', 'theme', 'automation', 'worker')
+            w.connection_tabs.setCurrentIndex(2)
+            w.nav.setCurrentRow(3)
+            app.processEvents()
+            assert w.steam_key_input.echoMode() == QLineEdit.EchoMode.Password
+            assert w.grab().save(str(destination / 'steam-connection.png'))
+            native = [name for name in ('main', 'modern_ui', 'app_icons', 'theme', 'automation', 'worker', 'steam_lookup')
                       if getattr(sys.modules.get(name), '__file__', '').endswith(('.pyd', '.so'))]
             if getattr(sys, 'frozen', False):
-                assert len(native) == 6, 'A first-party native module was replaced with source'
+                assert len(native) == 7, 'A first-party native module was replaced with source'
             (destination / 'packaged-checks.json').write_text(json.dumps(
                 {'icons': True, 'pages': 6, 'native_modules': native, 'frozen': bool(getattr(sys, 'frozen', False))},
                 indent=2), encoding='utf-8')
@@ -206,6 +211,7 @@ class ModernWindowMixin:
         self.connection_tabs = QTabWidget()
         self.connection_tabs.addTab(scroll_page(old[2]), '연결 상태')
         self.connection_tabs.addTab(scroll_page(old[1]), '계정 설정')
+        self.connection_tabs.addTab(self.build_steam_connection(), 'Steam 한국어 매칭')
         self.setting_tabs = QTabWidget()
         self.setting_tabs.addTab(self.build_program_settings(), '일반')
         self.setting_tabs.addTab(scroll_page(old[6]), '업데이트')
@@ -245,6 +251,56 @@ class ModernWindowMixin:
         self.official_check_requested = True
         self.chzzk_open_status.setText('공식 API 연결을 자동 확인하고 있습니다…')
         self.worker.submit('chzzk_open_test')
+
+    def build_steam_connection(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 8, 0, 0)
+        panel, box = card('Steam 한국어 게임 이름')
+        box.addWidget(label('게임 감지 → Steam 게임 확인 → 한국어 이름 조회 → 치지직 검색·검증'))
+        self.steam_enabled = ToggleSwitch('Steam 한국어 매칭')
+        self.steam_enabled.setChecked(self.config.get('steam_lookup_enabled', True))
+        box.addWidget(setting_row('Steam 한국어 매칭', 'Steam에 없는 게임은 기존 방식으로 매칭합니다.', self.steam_enabled))
+        self.steam_key_input = QLineEdit()
+        self.steam_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.steam_key_input.setMaxLength(32)
+        self.steam_key_input.setPlaceholderText('Steam Web API 키 · 32자리')
+        self.steam_key_input.setAccessibleName('Steam Web API 키')
+        box.addWidget(self.steam_key_input)
+        box.addWidget(label('키는 이 Windows 계정에서 보호 저장합니다. Steam 로그인이나 Steam ID 입력은 필요하지 않습니다.'))
+        self.steam_status = label('키 저장됨 · 연결 확인 대기' if get_steam_api_key() else 'API 키를 입력하면 한국어 이름 조회를 사용합니다.', 'inlineStatus')
+        box.addWidget(self.steam_status)
+        row = QHBoxLayout()
+        row.addWidget(action('저장 · 연결 확인', self.save_steam_connection, 'connections', True))
+        row.addWidget(action('저장된 키 삭제', self.forget_steam_connection, 'delete'))
+        row.addWidget(action('API 키 발급 페이지', self.open_steam_key_page, 'info'))
+        row.addStretch()
+        box.addLayout(row)
+        layout.addWidget(panel)
+        layout.addStretch()
+        return scroll_page(page)
+
+    def open_steam_key_page(self):
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl('https://steamcommunity.com/dev/apikey'))
+
+    def save_steam_connection(self):
+        from steam_lookup import valid_key
+        key = self.steam_key_input.text().strip()
+        if key and not valid_key(key):
+            self.steam_status.setText('32자리 Steam Web API 키를 입력해 주세요.')
+            return
+        self.config['steam_lookup_enabled'] = self.steam_enabled.isChecked()
+        if not self.persist():
+            return
+        self.steam_key_input.clear()
+        self.steam_status.setText('Steam API 연결을 확인하고 있습니다…')
+        self.worker.submit('steam_test', {'key': key})
+
+    def forget_steam_connection(self):
+        self.steam_key_input.clear()
+        self.worker.submit('steam_forget')
 
     def switch_page(self, index):
         if not getattr(self, 'ui_ready', False):
@@ -389,11 +445,12 @@ class ModernWindowMixin:
         self.dashboard_game_details.setVisible(bool(g))
         self.dashboard_empty_hint.setVisible(not g)
         if g:
-            self.dashboard_game.setText(g.get('game_name') or g.get('process') or '')
+            self.dashboard_game.setText(g.get('localized_name') or g.get('game_name') or g.get('process') or '')
             self.dashboard_process.setText(g.get('process') or '확인 중')
             self.dashboard_process.setToolTip(g.get('process') or '')
             self.dashboard_target.setText(g.get('category_name') or '확인 중')
             self.dashboard_game_meta.setText(g.get('stage', '감지됨'))
+            self.dashboard_method.setText(g.get('detection_source') or 'Discord 게임 목록')
         else:
             self.dashboard_game.setText('현재 실행 중인 게임이 없습니다.' if not any(x.get('running') for x in self.runtime_games.values())
                                         else '여러 게임이 실행 중입니다. 대표 게임을 선택해 주세요.')
@@ -980,6 +1037,10 @@ class ModernWindowMixin:
         # Existing tests/controller clients may call the method on a minimal host.
         from main import ExistingWindow
         kind = event['kind']
+        if kind == 'steam_status':
+            if hasattr(self, 'steam_status'):
+                self.steam_status.setText(event.get('text', 'Steam 연결 확인 대기'))
+            return
         if kind == 'league_mode_required':
             self.league_session_token = event['session']
             self.league_selected_session = None

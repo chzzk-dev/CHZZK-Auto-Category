@@ -14,6 +14,7 @@ _lock = threading.Lock()
 
 def redact(text):
     text = str(text)
+    text = re.sub(r'(?i)([?&]key=)[^&\s]+', r'\1[REDACTED]', text)
     text = re.sub(r"(?i)(authorization|cookie)[\"']?\s*[:=]\s*[^\r\n]+", r'\1=[REDACTED]', text)
     text = re.sub(r"(?i)(client[-_ ]?secret|access[-_ ]?token|refresh[-_ ]?token|password|api[-_ ]?key)[\"']?\s*[:=]\s*(?:\"[^\"]*\"|'[^']*'|[^\s,;]+)", r'\1=[REDACTED]', text)
     return re.sub(r'(?i)\bBearer\s+[^\s,;]+', 'Bearer [REDACTED]', text)

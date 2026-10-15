@@ -49,6 +49,11 @@ def main():
                     assert w.dashboard.horizontalScrollBar().maximum() == 0
                 assert w.grab().save(str(destination / f'page-{i}-{width}.png'))
                 checks.append({'page': i, 'width': width, 'height': height, 'title': w.page_title.text()})
+            w.nav.setCurrentRow(3)
+            w.connection_tabs.setCurrentIndex(2)
+            app.processEvents()
+            assert w.grab().save(str(destination / f'steam-connection-{width}.png'))
+            w.connection_tabs.setCurrentIndex(0)
         w.tray_popup.show()
         app.processEvents()
         assert w.tray_popup.grab().save(str(destination / 'tray.png'))

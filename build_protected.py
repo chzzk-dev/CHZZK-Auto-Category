@@ -19,7 +19,7 @@ TARGETS = {
 SOURCES = {name: ROOT / (name + '.py') for name in (
     'main', 'core', 'api', 'autodetect', 'bridge', 'chzzk_open', 'onboarding',
     'network_policy', 'theme', 'app_icons', 'modern_ui', 'normalization', 'automation', 'scheduling', 'diagnostics', 'release_versions',
-    'storage', 'worker', 'process_detect', 'updater', 'version', 'ui_components', 'updater_app',
+    'storage', 'worker', 'process_detect', 'updater', 'version', 'ui_components', 'updater_app', 'steam_lookup',
 )}
 
 
