@@ -5,10 +5,28 @@
 
 ## 미배포
 
+- 아직 기록할 변경 사항이 없습니다.
+
+## [4.12.9](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.9) — 2026-10-15 (KST)
+
+### 변경 사항
+
 - Discord 목록에 있지만 실행 파일 정보가 비어 있던 Pratfall을 실제 게임 파일 `Pratfall.exe`로 감지하도록 보완합니다.
 - Steam 한국어 제목 `프랫폴`을 별칭에 추가하고 기존 카테고리 검색·검증 후에만 자동 연결합니다.
 - 기존 Discord 캐시에도 보완 규칙을 즉시 적용하며 설정 초기화나 캐시 삭제가 필요하지 않습니다.
 - 런처·오류 보고 프로그램 제외, 수동 규칙 우선, 실행 파일 충돌 시 확인 대기 동작을 유지합니다.
+
+### 커밋
+
+- Fix Pratfall detection with verified executable compatibility in 4.12.9 ([9569e6e](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/9569e6e0727647473f662d6d1da7bd6101f76388))
+
+[전체 변경 비교](https://github.com/chzzk-dev/CHZZK-Auto-Category/compare/v4.12.8...v4.12.9)
+
+### 설치 파일
+
+- `ChzzkAutoCategory-4.12.9.msi`
+- `SHA256SUMS.txt`에서 설치 파일의 SHA-256을 확인할 수 있습니다.
+- 기존 MSI 설치본은 새 MSI로 업그레이드하며 사용자 설정을 유지합니다.
 
 ## [4.12.8](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.8) — 2026-10-15 (KST)
 
