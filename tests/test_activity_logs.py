@@ -138,6 +138,20 @@ class ActivityLogUiTests(unittest.TestCase):
         self.assertEqual(bar.value(), 0)
         w.hide()
 
+    def test_snapshot_arriving_before_pipeline_does_not_hide_game_exit(self):
+        w = self.window
+        state = {'key': 'game-id', 'process': 'Smilemo.exe', 'game_name': 'Smilemo',
+                 'stage': '감지됨', 'running': True}
+        w.on_event({'kind': 'pipeline_state', 'data': state})
+        w.on_event({'kind': 'detected_games', 'data': []})
+        self.assertTrue(state['running'])
+        w.on_event({'kind': 'pipeline_state', 'data': dict(state, running=False)})
+        w.on_event({'kind': 'pipeline_state', 'data': dict(state, running=False)})
+        self.assertEqual(len(w.log_entries), 2)
+        self.assertIn('종료', w.log.toPlainText())
+        w.on_event({'kind': 'pipeline_state', 'data': state})
+        self.assertEqual(len(w.log_entries), 3)
+
 
 if __name__ == '__main__':
     unittest.main()

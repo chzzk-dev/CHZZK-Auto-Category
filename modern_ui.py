@@ -201,6 +201,7 @@ class ModernWindowMixin:
     def __init__(self, config, preview=False):
         self.ui_ready = False
         self.runtime_games = {}
+        self.game_log_running = {}
         self.quick_rule_callbacks = {}
         self.official_check_requested = False
         self.league_session_token = None
@@ -1135,15 +1136,17 @@ class ModernWindowMixin:
             return
         if kind == 'pipeline_remove' and hasattr(self, 'runtime_games'):
             self.runtime_games.pop(event.get('key'), None)
+            self.game_log_running.pop(event.get('key'), None)
             return
         if kind == 'pipeline_state' and hasattr(self, 'runtime_games'):
             data = event['data']
-            previous = self.runtime_games.get(data['key'])
-            if data.get('running') and (previous is None or not previous.get('running')):
+            previous_running = self.game_log_running.get(data['key'], False)
+            if data.get('running') and not previous_running:
                 self.append_log('[게임 감지] ' + str(data.get('localized_name') or data.get('game_name') or data.get('process')) + ' 실행 감지')
-            elif previous and previous.get('running') and not data.get('running'):
+            elif previous_running and not data.get('running'):
                 self.append_log('[게임 감지] ' + str(data.get('localized_name') or data.get('game_name') or data.get('process')) + ' 종료')
-            self.runtime_games[data['key']] = data
+            self.game_log_running[data['key']] = bool(data.get('running'))
+            self.runtime_games[data['key']] = dict(data)
             self.refresh_table()
             self.refresh_dashboard()
             return
