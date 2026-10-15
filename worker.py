@@ -540,6 +540,7 @@ class Worker(QThread):
             current = self.client().settings()
             self.emit('checked', text='연결 성공 · ' + str((current.get('category') or {}).get('categoryValue', '카테고리 없음')), category_name=str((current.get('category') or {}).get('categoryValue') or '카테고리 없음'))
         elif name == 'quick_game_mode':
+            import unicodedata
             from normalization import normalized_name
             targets = {'League of Legends': ('리그 오브 레전드', 'League of Legends'),
                        'Teamfight Tactics': ('전략적 팀 전투', 'Teamfight Tactics')}
@@ -553,8 +554,13 @@ class Worker(QThread):
                 for query in targets[game]:
                     rows = self.mapper._cached_search(query, lambda q: self.client().search(q, self.chzzk_open))
                     for c in rows:
+                        candidate_name = c.get('categoryValue', '')
+                        # TFT's CHZZK title includes the current set/season subtitle.
+                        # Scope this exception to explicit TFT selection; other editions remain distinct.
+                        if game == 'Teamfight Tactics':
+                            candidate_name = unicodedata.normalize('NFKC', str(candidate_name)).partition(':')[0]
                         if (c.get('categoryId') and c.get('categoryType', 'GAME') == 'GAME'
-                                and normalized_name(c.get('categoryValue', '')) in {normalized_name(n) for n in targets[game]}):
+                                and normalized_name(candidate_name) in {normalized_name(n) for n in targets[game]}):
                             exact[c['categoryId']] = c
                     if exact:
                         break

@@ -249,6 +249,35 @@ class WorkerSafetyTests(unittest.TestCase):
         self.assertIn('League of Legends.exe', ready['data']['process_aliases'])
         self.worker.api.apply.assert_not_called()
 
+    def test_tft_set_subtitle_matches_base_name_but_preserves_api_category(self):
+        for title in ('전략적 팀 전투 : 신비의 숲', '전략적 팀 전투: 새 시즌', 'Teamfight Tactics：Set 20'):
+            self.events.clear()
+            self.worker.mapper.clear_search_cache()
+            self.worker.api.search.reset_mock()
+            self.worker.api.search.return_value = [category('live-tft-id', title)]
+            self.worker.command('quick_game_mode', {'token': 'pick', 'process': 'LeagueClient.exe', 'game': 'Teamfight Tactics'})
+            ready = next(e for e in self.events if e['kind'] == 'quick_rule_ready')
+            self.assertEqual(ready['data']['category_id'], 'live-tft-id')
+            self.assertEqual(ready['data']['category_name'], title)
+            self.assertEqual(self.worker.api.search.call_args.args[0], '전략적 팀 전투')
+            self.assertFalse(any(e['kind'] == 'quick_rule_error' for e in self.events))
+
+    def test_tft_subtitle_matching_rejects_other_games_and_conflicting_results(self):
+        cases = ([category('wrong', '전략적 팀 전투 모바일 : 시즌')],
+                 [category('one', '전략적 팀 전투 : 첫 시즌'), category('two', '전략적 팀 전투 : 다른 시즌')])
+        for rows in cases:
+            self.events.clear()
+            self.worker.mapper.clear_search_cache()
+            self.worker.api.search.return_value = rows
+            self.worker.command('quick_game_mode', {'token': 'pick', 'process': 'LeagueClient.exe', 'game': 'Teamfight Tactics'})
+            self.assertFalse(any(e['kind'] == 'quick_rule_ready' for e in self.events))
+            self.assertTrue(any(e['kind'] == 'quick_rule_error' for e in self.events))
+        self.events.clear()
+        self.worker.mapper.clear_search_cache()
+        self.worker.api.search.return_value = [category('wrong', 'League of Legends : Wild Rift')]
+        self.worker.command('quick_game_mode', {'token': 'pick', 'process': 'LeagueClient.exe', 'game': 'League of Legends'})
+        self.assertFalse(any(e['kind'] == 'quick_rule_ready' for e in self.events))
+
     def test_quick_selection_never_saves_an_ambiguous_or_wrong_category(self):
         for rows in ([category('wrong', '리그 오브 레전드')],
                      [category('one', '전략적 팀 전투'), category('two', '전략적 팀 전투')]):
