@@ -5,10 +5,28 @@
 
 ## 미배포
 
+- 아직 기록할 변경 사항이 없습니다.
+
+## [4.12.7](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.7) — 2026-10-15 (KST)
+
+### 변경 사항
+
 - 대시보드를 상단 상태 요약 3개, 현재 게임 정보, 최근 활동 순서로 재배치하고 중복 감지 카드를 통합합니다.
 - 게임 카드의 불필요한 높이와 여백을 줄이고 실행 파일·카테고리·감지 방식·매칭 상태를 가로로 정렬합니다.
 - 게임 관리와 전체 로그 버튼을 제목 옆에 작게 배치하고 최근 활동 5건의 시간·내용을 구분선으로 정돈합니다.
 - 기본 창을 1360×860으로 조정하고 최소 1200×820 및 기존 기능·설정·연결 정보는 유지합니다.
+
+### 커밋
+
+- Compact dashboard cards and align game details and activity in 4.12.7 ([279edb7](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/279edb7172905e40f9c4158f8ed4864c6a119899))
+
+[전체 변경 비교](https://github.com/chzzk-dev/CHZZK-Auto-Category/compare/v4.12.6...v4.12.7)
+
+### 설치 파일
+
+- `ChzzkAutoCategory-4.12.7.msi`
+- `SHA256SUMS.txt`에서 설치 파일의 SHA-256을 확인할 수 있습니다.
+- 기존 MSI 설치본은 새 MSI로 업그레이드하며 사용자 설정을 유지합니다.
 
 ## [4.12.6](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.6) — 2026-10-15 (KST)
 
