@@ -55,6 +55,21 @@ QTableView::item { padding:8px; border-bottom:1px solid #555555; }
 QTableView::item:selected { background:#E4E0D6; color:#252525; }
 QHeaderView::section { color:#F1EFE9; background:#272727; padding:12px; border:none; border-bottom:2px solid white; font-weight:700; }
 QCheckBox { spacing:9px; }
+QFrame#settingRow { background:transparent; border:none; border-bottom:1px solid #505050; }
+QFrame#panelCard QLabel#settingTitle { color:#F4F1E9; font-size:14px; font-weight:600; }
+QFrame#panelCard QLabel#settingDescription { color:#BBB7AD; font-size:12px; }
+QPushButton { min-height:26px; padding:9px 16px; border-radius:11px; font-weight:600; }
+QPushButton:pressed { background:#CEC8BC; }
+QPushButton#primary:pressed { background:#111111; }
+QComboBox { padding:7px 12px; min-height:24px; }
+QComboBox::down-arrow { image:none; width:0; height:0; }
+QComboBox::drop-down { width:28px; border:none; border-left:1px solid #D5D1C7; }
+QScrollBar:vertical { background:#E9E5DB; width:10px; margin:2px; border-radius:5px; }
+QScrollBar::handle:vertical { background:#A8A296; min-height:38px; border-radius:4px; }
+QScrollBar::handle:vertical:hover { background:#787268; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background:transparent; }
+
 QTabWidget::pane { border:none; }
 QTabBar::tab { color:#77756F; background:transparent; padding:10px 16px; border-bottom:3px solid transparent; }
 QTabBar::tab:selected { color:#252525; border-bottom:3px solid #252525; font-weight:700; }

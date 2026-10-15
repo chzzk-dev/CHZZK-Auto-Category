@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, Qt
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, Qt, Property, QRectF, QSize
+from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
+    QComboBox,
     QDialog,
     QFrame,
     QGraphicsDropShadowEffect,
@@ -209,3 +211,74 @@ def confirm(
         danger=danger,
     )
     return dialog.exec() == QDialog.DialogCode.Accepted
+
+
+class ToggleSwitch(QCheckBox):
+    """Native checkbox semantics with a keyboard-accessible sliding switch."""
+    def __init__(self, title='', parent=None):
+        super().__init__('', parent)
+        self.setAccessibleName(title)
+        self.setFixedSize(56, 30)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self._position = 0.0
+        self._animation = QPropertyAnimation(self, b'position', self)
+        self._animation.setDuration(140)
+        self._animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        self.toggled.connect(self._animate)
+
+    def _animate(self, checked):
+        self._animation.stop()
+        end = 1.0 if checked else 0.0
+        if self.isVisible():
+            self._animation.setStartValue(self._position)
+            self._animation.setEndValue(end)
+            self._animation.start()
+        else:
+            self._set_position(end)
+
+    def _get_position(self):
+        return self._position
+
+    def _set_position(self, value):
+        self._position = value
+        self.update()
+
+    position = Property(float, _get_position, _set_position)
+
+    def sizeHint(self):
+        return QSize(56, 30)
+
+    def hitButton(self, pos):
+        return self.rect().contains(pos)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        if not self.isEnabled():
+            painter.setOpacity(0.5)
+        painter.setPen(QPen(QColor('#AAA69D' if self.hasFocus() else '#74716A'), 1.5))
+        painter.setBrush(QColor('#EDEBE4' if self.isChecked() else '#505050'))
+        painter.drawRoundedRect(QRectF(1, 1, 54, 28), 14, 14)
+        x = 4 + self._position * 26
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor('#252525' if self.isChecked() else '#F5F3ED'))
+        painter.drawEllipse(QRectF(x, 4, 22, 22))
+        painter.setPen(QPen(QColor('#FFFFFF' if self.isChecked() else '#555555'), 1.8))
+        if self.isChecked():
+            painter.drawLine(QPoint(round(x + 6), 15), QPoint(round(x + 10), 19))
+            painter.drawLine(QPoint(round(x + 10), 19), QPoint(round(x + 17), 11))
+        else:
+            painter.drawLine(QPoint(round(x + 8), 12), QPoint(round(x + 14), 18))
+            painter.drawLine(QPoint(round(x + 8), 18), QPoint(round(x + 14), 12))
+
+
+class SettingsComboBox(QComboBox):
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(QColor('#3E3B35' if self.isEnabled() else '#AAA69D'), 1.8))
+        x, y = self.width() - 16, self.height() // 2
+        painter.drawLine(QPoint(x - 4, y - 2), QPoint(x, y + 2))
+        painter.drawLine(QPoint(x, y + 2), QPoint(x + 4, y - 2))

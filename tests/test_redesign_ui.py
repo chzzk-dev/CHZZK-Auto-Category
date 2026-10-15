@@ -201,6 +201,46 @@ class ModernUiTests(unittest.TestCase):
         self.assertEqual(w.auto_rules, [])
         self.assertEqual(w.quick_rule_callbacks, {})
 
+    def test_toggle_supports_keyboard_and_disabled_state(self):
+        from ui_components import ToggleSwitch
+        from PySide6.QtTest import QTest
+        from PySide6.QtCore import Qt
+        control = ToggleSwitch('테스트 설정')
+        control.show()
+        control.setFocus()
+        changes = []
+        control.toggled.connect(changes.append)
+        QTest.keyClick(control, Qt.Key.Key_Space)
+        self.assertTrue(control.isChecked())
+        self.assertEqual(changes, [True])
+        self.assertEqual(control.accessibleName(), '테스트 설정')
+        control.setEnabled(False)
+        QTest.keyClick(control, Qt.Key.Key_Space)
+        self.assertTrue(control.isChecked())
+        control.close()
+        control.deleteLater()
+
+    def test_settings_use_switches_and_official_api_is_mandatory(self):
+        from ui_components import ToggleSwitch
+        w = self.window
+        self.assertEqual((w.width(), w.height()), (1440, 960))
+        for name in ('auto_detect', 'only_when_live', 'auto_start_change', 'autostart', 'notify', 'auto_update', 'allow_prerelease'):
+            self.assertIsInstance(getattr(w, name), ToggleSwitch)
+        self.assertTrue(w.chzzk_open_enabled.isChecked())
+        self.assertFalse(w.chzzk_open_enabled.isEnabled())
+        self.assertFalse(w.chzzk_open_enabled.isVisible())
+        config = normalize_config({'chzzk_open_enabled': False, 'channel': 'a'*32})
+        self.assertTrue(config['chzzk_open_enabled'])
+
+    def test_official_connection_is_checked_once_automatically(self):
+        w = self.window
+        w.preview = False
+        with patch.object(w.worker, 'submit') as submit:
+            for _ in range(2):
+                w.on_event({'kind': 'checked', 'text': '연결 성공', 'category_name': 'talk'})
+        self.assertEqual(sum(call.args[0] == 'chzzk_open_test' for call in submit.call_args_list), 1)
+        w.preview = True
+
 
 if __name__ == '__main__':
     unittest.main()

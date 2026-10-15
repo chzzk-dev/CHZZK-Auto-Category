@@ -213,8 +213,6 @@ class Worker(QThread):
             self.emit('status', text=text)
 
     def build_chzzk_open_client(self):
-        if not self.config.get('chzzk_open_enabled', True):
-            return None
         return ChzzkOpenAPI()
 
     def client(self):
@@ -580,7 +578,7 @@ class Worker(QThread):
                       official=bool(self.chzzk_open and self.chzzk_open.configured))
         elif name == 'chzzk_open_test':
             if self.chzzk_open is None or not self.chzzk_open.configured:
-                raise ChzzkOpenAPIError('CHZZK 공식 Open API 보조 검색을 켜 주세요.')
+                raise ChzzkOpenAPIError('공식 API 인증 정보가 포함되지 않은 빌드입니다. 최신 공식 설치본을 설치해 주세요.')
             ok = self.chzzk_open.test()
             self.emit('chzzk_open_tested', ok=bool(ok))
         elif name == 'processes':
@@ -686,7 +684,7 @@ class Worker(QThread):
                         self.emit('log', text=f'[{label}] {detail}')
                         message = {'check': '치지직 계정을 확인할 수 없습니다. 스튜디오 로그인 후 다시 연결해 주세요.',
                                    'search': '게임 카테고리를 검색하지 못했습니다. 다시 검색하거나 직접 선택해 주세요.',
-                                   'chzzk_open_test': '공식 카테고리 API에 연결하지 못했습니다. 인증 설정을 확인해 주세요.'}.get(name, '작업을 완료하지 못했습니다. 연결을 확인하고 다시 시도해 주세요.')
+                                   'chzzk_open_test': '공식 API 연결을 확인하지 못했습니다. 잠시 후 다시 확인해 주세요.'}.get(name, '작업을 완료하지 못했습니다. 연결을 확인하고 다시 시도해 주세요.')
                         self.emit('error', operation=name, text=message)
                 except queue.Empty:
                     pass

@@ -5,7 +5,7 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QSize
+from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QSize, QTimer
 from PySide6.QtWidgets import (QWidget, QFrame, QLabel, QVBoxLayout, QHBoxLayout,
     QGridLayout, QScrollArea, QTabWidget, QListWidgetItem, QComboBox, QLineEdit,
     QCheckBox, QTableView, QHeaderView, QAbstractItemView, QPushButton, QDialog,
@@ -16,6 +16,7 @@ from normalization import normalized_name, alias_conflicts
 from scheduling import HOUR_OPTIONS
 from storage import save_config
 from theme import TOKENS
+from ui_components import ToggleSwitch, SettingsComboBox as QComboBox
 from version import APP_VERSION
 
 PAGES = (
@@ -100,12 +101,44 @@ def card(title):
     return widget, layout
 
 
+def setting_row(title, description, control):
+    row = QFrame()
+    row.setObjectName('settingRow')
+    layout = QHBoxLayout(row)
+    layout.setContentsMargins(0, 9, 0, 9)
+    layout.setSpacing(24)
+    text = QVBoxLayout()
+    text.setSpacing(4)
+    text.addWidget(label(title, 'settingTitle'))
+    text.addWidget(label(description, 'settingDescription'))
+    layout.addLayout(text, 1)
+    if isinstance(control, QComboBox):
+        control.setMinimumWidth(140)
+        control.setMaximumWidth(190)
+    control.setAccessibleName(title)
+    layout.addWidget(control, 0, Qt.AlignmentFlag.AlignVCenter)
+    return row
+
+
 def scroll_page(widget):
     scroll = QScrollArea()
     scroll.setWidgetResizable(True)
     scroll.setFrameShape(QFrame.Shape.NoFrame)
     scroll.setWidget(widget)
     return scroll
+
+
+def settings_shell(content, save):
+    page = QWidget()
+    layout = QVBoxLayout(page)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(10)
+    layout.addWidget(scroll_page(content), 1)
+    footer = QHBoxLayout()
+    footer.addStretch()
+    footer.addWidget(action('설정 저장', save, 'success', True))
+    layout.addLayout(footer)
+    return page
 
 
 class GameTableModel(QAbstractTableModel):
@@ -151,6 +184,7 @@ class ModernWindowMixin:
         self.ui_ready = False
         self.runtime_games = {}
         self.quick_rule_callbacks = {}
+        self.official_check_requested = False
         self.recent_activity = deque(maxlen=5)
         self.last_category = None
         self.connection_retry_at = 0
@@ -200,6 +234,14 @@ class ModernWindowMixin:
         old[4].layout().itemAt(0).layout().insertWidget(0, self.log_filter)
         self.log_filter.currentTextChanged.connect(self.render_logs)
         self.log_entries = deque(maxlen=1000)
+        QTimer.singleShot(0, self.ensure_official_api_check)
+
+    def ensure_official_api_check(self):
+        if self.preview or self.official_check_requested:
+            return
+        self.official_check_requested = True
+        self.chzzk_open_status.setText('공식 API 연결을 자동 확인하고 있습니다…')
+        self.worker.submit('chzzk_open_test')
 
     def switch_page(self, index):
         if not getattr(self, 'ui_ready', False):
@@ -228,7 +270,7 @@ class ModernWindowMixin:
         page = QWidget()
         layout = QGridLayout(page)
         layout.setContentsMargins(0, 4, 0, 0)
-        layout.setSpacing(6)
+        layout.setSpacing(16)
         self.dashboard_values = {}
         hero, box = card('현재 실행 중인 게임')
         self.dashboard_game = label('현재 실행 중인 게임이 없습니다.', 'heroGame')
@@ -255,7 +297,7 @@ class ModernWindowMixin:
             layout.setColumnStretch(i, 1)
         layout.setRowStretch(0, 1)
         layout.setRowStretch(1, 1)
-        layout.setRowStretch(2, 2)
+        layout.setRowStretch(2, 1)
         return scroll_page(page)
 
     def representative_game(self):
@@ -641,69 +683,72 @@ class ModernWindowMixin:
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 8, 0, 8)
-        layout.setSpacing(14)
-
-        def check(name, text, key, description, parent_layout):
-            widget = QCheckBox(text)
-            widget.setChecked(self.config.get(key, True))
-            setattr(self, name, widget)
-            parent_layout.addWidget(widget)
-            parent_layout.addWidget(label(description))
-            return widget
-
+        layout.setSpacing(18)
+        grid = QGridLayout()
+        grid.setSpacing(16)
+        def toggle(name, title, key, hint, box):
+            control = ToggleSwitch(title)
+            control.setChecked(self.config.get(key, True))
+            setattr(self, name, control)
+            box.addWidget(setting_row(title, hint, control))
+            return control
         c, box = card('게임 감지')
-        check('auto_detect', 'Discord 목록 기반 자동 감지', 'auto_detect', '계정 로그인 없이 실행 파일 이름을 공개 게임 목록과 대조합니다.', box)
+        box.setSpacing(4)
+        toggle('auto_detect', '게임 자동 감지', 'auto_detect', '게임을 실행하면 자동으로 찾습니다. Discord 로그인은 필요하지 않습니다.', box)
         self.interval = QComboBox()
         for sec in (3, 5, 10, 15, 30, 60):
             self.interval.addItem(f'{sec}초', sec)
         self.interval.setCurrentIndex(max(0, self.interval.findData(self.config.get('interval', 5))))
-        form = QFormLayout()
-        form.addRow('게임 감지 주기', self.interval)
-        box.addLayout(form)
-        box.addWidget(label('보조 프로세스 통합 · 게임 종료 확인 · 안전한 대표 게임 선택은 항상 적용됩니다.'))
-        self.auto_aggressive = QCheckBox('자동 선택 강화 · 필수')
+        box.addWidget(setting_row('감지 주기', '기본 5초 · 게임 실행과 종료를 확인합니다.', self.interval))
+        self.auto_aggressive = QCheckBox()
         self.auto_aggressive.setChecked(True)
         self.auto_aggressive.setEnabled(False)
-        box.addWidget(self.auto_aggressive)
-        layout.addWidget(c)
+        box.addWidget(label('중복 게임 통합과 안전한 자동 선택은 기본으로 적용됩니다.'))
+        grid.addWidget(c, 0, 0)
         c, box = card('카테고리 자동 변경')
-        check('auto_start_change', '연결되면 자동 변경 시작', 'auto_start_change', '게임이 바뀌면 안정화 후 반영합니다. 같은 카테고리는 반복 요청하지 않습니다.', box)
-        check('only_when_live', '방송 중일 때만 적용', 'only_when_live', '실제 방송 상태를 확인할 수 없으면 적용을 보류합니다.', box)
-        box.addWidget(label('수동 규칙 우선 · 낮은 신뢰도는 확인 필요로 분리 · 실패 시 제한된 백오프 재시도'))
-        layout.addWidget(c)
-        c, box = card('카테고리 검색')
-        check('chzzk_open_enabled', '공식 API 보조 검색', 'chzzk_open_enabled', '빌드 인증 정보가 있을 때 사용하며 기존 공개 API와 Studio 검색 경로를 유지합니다.', box)
-        self.chzzk_open_status = label('연결 확인 전', 'inlineStatus')
+        box.setSpacing(4)
+        toggle('auto_start_change', '연결되면 자동 시작', 'auto_start_change', '연결을 확인하면 자동 변경을 시작합니다.', box)
+        toggle('only_when_live', '방송 중에만 변경', 'only_when_live', '방송 중인 것으로 확인될 때만 적용합니다.', box)
+        box.addWidget(label('수동 연결을 우선하며 같은 카테고리는 반복 변경하지 않습니다.'))
+        grid.addWidget(c, 0, 1)
+        c, box = card('카테고리 검색 및 연결')
+        box.setSpacing(4)
+        self.chzzk_open_enabled = QCheckBox()
+        self.chzzk_open_enabled.setChecked(True)
+        self.chzzk_open_enabled.setEnabled(False)
+        box.addWidget(label('공식 API · 필수 자동 연결', 'settingTitle'))
+        box.addWidget(label('설치 프로그램에 포함된 인증 정보를 자동 사용합니다. 별도 입력이나 켜기 설정이 필요 없습니다.'))
+        self.chzzk_open_status = label('앱을 시작하면 공식 API 상태를 자동 확인합니다.', 'inlineStatus')
         box.addWidget(self.chzzk_open_status)
-        box.addWidget(action('공식 API 연결 확인', self.test_chzzk_open_connection, 'connections'))
         self.category_sync = QComboBox()
         for hour in HOUR_OPTIONS:
             self.category_sync.addItem(f'{hour}시간', hour)
         self.category_sync.setCurrentIndex(max(0, self.category_sync.findData(self.config.get('category_sync_hours', 6))))
-        form = QFormLayout()
-        form.addRow('카테고리 정기 동기화', self.category_sync)
-        box.addLayout(form)
-        box.addWidget(label('기본 6시간 · 새로운 게임은 즉시 개별 검색합니다. 검증된 캐시는 오프라인에서도 재사용합니다.'))
-        layout.addWidget(c)
-        advanced = QPushButton('고급 설정 펼치기')
+        box.addWidget(setting_row('카테고리 정보 갱신', '새 게임은 대기 없이 바로 검색합니다.', self.category_sync))
+        grid.addWidget(c, 1, 0, 1, 2)
+        for col in (0, 1):
+            grid.setColumnStretch(col, 1)
+        layout.addLayout(grid)
+        advanced = QPushButton('고급 설정 보기')
+        advanced.setCheckable(True)
         set_button_icon(advanced, 'settings')
         layout.addWidget(advanced)
-        c, box = card('Discord 데이터 갱신')
+        c, box = card('고급 연결 설정')
+        box.setSpacing(4)
         self.discord_refresh = QComboBox()
         for hour in (1, 6, 12, 24, 72, 168):
             self.discord_refresh.addItem(f'{hour}시간', hour)
         self.discord_refresh.setCurrentIndex(max(0, self.discord_refresh.findData(self.config.get('discord_refresh_hours', 24))))
-        box.addWidget(self.discord_refresh)
+        box.addWidget(setting_row('Discord 게임 목록 갱신', '게임 감지 주기와 별개의 데이터 갱신 주기입니다.', self.discord_refresh))
+        box.addWidget(action('공식 API 다시 확인', self.test_chzzk_open_connection, 'refresh'))
         c.hide()
-        advanced.clicked.connect(lambda: (c.setVisible(not c.isVisible()), advanced.setText('고급 설정 접기' if c.isVisible() else '고급 설정 펼치기')))
+        advanced.toggled.connect(c.setVisible)
         layout.addWidget(c)
-        layout.addWidget(action('설정 저장', self.save_options, 'success', True))
         layout.addStretch()
-        self.pages.addWidget(scroll_page(page))
-        # Existing save_options reads these even before program settings are composed.
+        self.pages.addWidget(settings_shell(page, self.save_options))
         for name, key in (('notify', 'notify'), ('pending_sound', 'pending_sound'), ('start_hidden', 'start_hidden'),
                           ('autostart', 'autostart'), ('auto_update', 'auto_update'), ('update_notify', 'update_notify')):
-            widget = QCheckBox()
+            widget = ToggleSwitch(name)
             widget.setChecked(self.config.get(key, True))
             setattr(self, name, widget)
         self.update_check_interval = QComboBox()
@@ -717,41 +762,48 @@ class ModernWindowMixin:
     def build_program_settings(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        c, box = card('백그라운드 및 알림')
-        texts = (('autostart', 'Windows 로그인 시 백그라운드 실행', '메인 창을 열지 않고 트레이에서 실행합니다.'),
-                 ('start_hidden', '직접 실행할 때도 트레이로 시작', '첫 설정 안내가 완료된 뒤 적용합니다.'),
-                 ('notify', '카테고리 변경 알림', '변경 확인이 완료되면 알립니다.'),
-                 ('pending_sound', '확인 필요한 새 게임 알림음', '같은 게임의 반복 감지는 알리지 않습니다.'),
-                 ('update_notify', '새 버전 알림', '같은 버전은 반복 알림하지 않습니다.'))
-        for name, text, hint in texts:
-            w = getattr(self, name)
-            w.setText(text)
-            box.addWidget(w)
-            box.addWidget(label(hint))
-        self.close_to_tray = QCheckBox('창 닫기 시 트레이 유지')
-        self.close_to_tray.setChecked(self.config.get('close_to_tray', True))
-        self.minimize_to_tray = QCheckBox('최소화 시 트레이 이동')
-        self.minimize_to_tray.setChecked(self.config.get('minimize_to_tray', True))
-        self.detailed_logs = QCheckBox('상세 로그 순환 저장')
-        self.detailed_logs.setChecked(self.config.get('detailed_logs', True))
-        for w in (self.close_to_tray, self.minimize_to_tray, self.detailed_logs):
-            box.addWidget(w)
-        layout.addWidget(c)
+        layout.setSpacing(18)
+        grid = QGridLayout()
+        grid.setSpacing(16)
+        c, startup_box = card('실행 및 트레이')
+        startup_box.setSpacing(4)
+        grid.addWidget(c, 0, 0)
+        c, notification_box = card('알림 및 기록')
+        notification_box.setSpacing(4)
+        grid.addWidget(c, 0, 1)
+        rows = (
+            ('autostart', 'Windows 시작 시 실행', '로그인하면 백그라운드에서 시작합니다.', startup_box),
+            ('start_hidden', '트레이로 시작', '처음 설정을 마친 뒤 메인 창을 숨겨 시작합니다.', startup_box),
+            ('notify', '카테고리 변경 알림', '변경이 완료되면 알립니다.', notification_box),
+            ('pending_sound', '새 게임 확인 알림음', '확인이 필요한 게임을 처음 발견하면 소리로 알립니다.', notification_box),
+            ('update_notify', '새 버전 알림', '같은 버전은 반복해서 알리지 않습니다.', notification_box))
+        for name, title, hint, box in rows:
+            box.addWidget(setting_row(title, hint, getattr(self, name)))
+        for name, title, hint, key, box in (
+            ('close_to_tray', '닫아도 백그라운드 유지', '창을 닫아도 게임 감지를 유지합니다.', 'close_to_tray', startup_box),
+            ('minimize_to_tray', '최소화 시 트레이로 이동', '작업 표시줄 대신 트레이에 표시합니다.', 'minimize_to_tray', startup_box),
+            ('detailed_logs', '상세 로그 저장', '기록을 제한된 크기로 순환 저장합니다.', 'detailed_logs', notification_box)):
+            switch = ToggleSwitch(title)
+            switch.setChecked(self.config.get(key, True))
+            setattr(self, name, switch)
+            box.addWidget(setting_row(title, hint, switch))
+        for col in (0, 1):
+            grid.setColumnStretch(col, 1)
+        layout.addLayout(grid)
         c, box = card('프로그램 업데이트')
-        self.auto_update.setText('새 릴리스 자동 확인')
-        box.addWidget(self.auto_update)
-        form = QFormLayout()
-        form.addRow('자동 확인 주기', self.update_check_interval)
-        box.addLayout(form)
-        box.addWidget(label('최소 1시간 · 기본 3시간 · 마지막 확인 시각을 기준으로 예약합니다. 게임 감지 주기와 별개입니다.'))
-        self.allow_prerelease = QCheckBox('베타(사전 릴리스)도 확인')
+        box.setSpacing(4)
+        box.addWidget(setting_row('새 버전 자동 확인', '설정한 간격으로 새 정식 버전을 확인합니다.', self.auto_update))
+        box.addWidget(setting_row('자동 확인 주기', '최소 1시간 · 기본 3시간', self.update_check_interval))
+        self.allow_prerelease = ToggleSwitch('베타 버전도 확인')
         self.allow_prerelease.setChecked(self.config.get('allow_prerelease', False))
-        box.addWidget(self.allow_prerelease)
-        box.addWidget(action('지금 확인', self.check_for_updates_manual, 'refresh'))
+        box.addWidget(setting_row('베타 버전도 확인', '사전 릴리스를 업데이트 확인 대상에 포함합니다.', self.allow_prerelease))
+        actions = QHBoxLayout()
+        actions.addWidget(action('지금 확인', self.check_for_updates_manual, 'refresh'))
+        actions.addStretch()
+        box.addLayout(actions)
         layout.addWidget(c)
-        layout.addWidget(action('설정 저장', self.save_options, 'success', True))
         layout.addStretch()
-        return scroll_page(page)
+        return settings_shell(page, self.save_options)
 
     def save_options(self):
         self.config.update(only_when_live=self.only_when_live.isChecked(),
@@ -841,6 +893,7 @@ class ModernWindowMixin:
                 self.connection_retry_at = time.monotonic() + min(300, 5 * 2 ** min(6, self.connection_failures))
                 self.account_status.setText('치지직 연결을 확인하지 못했습니다. 스튜디오 로그인 후 다시 연결해 주세요.')
             if kind == 'checked':
+                self.ensure_official_api_check()
                 import time
                 self.last_category_observed_at = time.monotonic()
                 self.connection_retry_at = 0

@@ -33,7 +33,7 @@ def main():
         assert w.pages.count() == w.nav.count() == 6
         assert validate_icons()
         checks = []
-        for width, height in ((1200, 820), (1440, 900)):
+        for width, height in ((1200, 820), (1440, 960)):
             w.resize(width, height)
             for i in range(6):
                 w.nav.setCurrentRow(i)

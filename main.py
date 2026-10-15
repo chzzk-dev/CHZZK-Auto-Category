@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (QApplication, QAbstractItemView, QCheckBox, QComb
     QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem, QMainWindow,
     QPushButton, QSpinBox, QStyle, QSystemTrayIcon, QStackedWidget, QTableWidget,
     QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget, QFrame, QGraphicsOpacityEffect, QScrollArea, QGridLayout, QSizeGrip, QGraphicsDropShadowEffect)
+from ui_components import SettingsComboBox as QComboBox
 from core import Rule, channel_id
 from storage import (data_dir, load_config, save_config, set_windows_autostart,
                      ensure_start_menu_shortcut)
@@ -749,7 +750,7 @@ class ExistingWindow(QMainWindow):
         self.setObjectName('appWindow')
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        self.resize(1200, 820)
+        self.resize(1440, 960)
         self.setMinimumSize(1200, 820)
 
         root = QWidget()
@@ -854,7 +855,7 @@ class ExistingWindow(QMainWindow):
         content = QFrame()
         content.setObjectName('contentCard')
         content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(14, 18, 10, 10)
+        content_layout.setContentsMargins(24, 24, 20, 18)
         content_layout.setSpacing(15)
 
         header = QHBoxLayout()
@@ -1816,7 +1817,7 @@ class ExistingWindow(QMainWindow):
                 self.status_label.setText(self.last_runtime_status)
                 self.refresh_connection_page()
         elif kind == 'chzzk_open_tested':
-            self.chzzk_open_status.setText('CHZZK 공식 API 연결 성공 · 공식 + 비공식 카테고리 검색을 함께 사용합니다.')
+            self.chzzk_open_status.setText('공식 API 연결됨 · 자동 설정 완료')
             self.append_log('CHZZK 공식 Open API 연결 확인 성공')
         elif kind == 'category_choice_required':
             self.prompt_category_choice(event)
