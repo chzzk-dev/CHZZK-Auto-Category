@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
-from autodetect import DiscordAutoMapper, detectable_running_processes, parse_detectable_index
+from autodetect import DiscordAutoMapper, detectable_running_processes, parse_detectable_index, cleanup_auto_mappings
 from core import Rule
 from worker import Worker
 
@@ -64,18 +64,26 @@ class DetectionLookupTests(unittest.TestCase):
         self.assertEqual(self.mapper.discover(['Celeste.exe'], [rule], search), ([], []))
         search.assert_not_called()
 
-    def test_mimesis_uses_exact_korean_category_and_keeps_actual_id(self):
-        self.mapper.entries = {'mimesis.exe': [{'name': 'MIMESIS', 'aliases': []}]}
-        category = {'categoryId': 'actual-api-id', 'categoryValue': '미메시스', 'categoryType': 'GAME'}
-        search = Mock(return_value=[dict(category, categoryId='other', categoryValue='미메시스 관련 게임'), category])
-        rules, pending = self.mapper.discover(['MIMESIS.exe'], [], search)
-        search.assert_called_once_with('미메시스')
-        self.assertEqual(pending, [])
-        self.assertEqual([(r.category_id, r.category_name) for r in rules], [('actual-api-id', '미메시스')])
-        self.mapper.clear_search_cache()
-        rules, pending = self.mapper.discover(['mimesis.EXE'], [], Mock(return_value=[]))
-        self.assertEqual(rules, [])
-        self.assertEqual(pending[0]['reason'], 'category-not-found')
+    def test_localized_overrides_keep_verified_ids_and_survive_rule_cleanup(self):
+        for process, name, korean in [('MIMESIS.exe', 'MIMESIS', '미메시스'),
+                                      ('Smilemo.exe', 'SMILEMO', '스마일모')]:
+            with self.subTest(process=process):
+                self.mapper.clear_search_cache()
+                self.mapper.entries = {process.casefold(): [{'name': name, 'aliases': []}]}
+                category = {'categoryId': 'actual-api-id', 'categoryValue': korean, 'categoryType': 'GAME'}
+                search = Mock(return_value=[dict(category, categoryId='other', categoryValue=korean+' 관련 게임'), category])
+                rules, pending = self.mapper.discover([process], [], search)
+                search.assert_called_once_with(korean)
+                self.assertEqual(pending, [])
+                self.assertEqual([(r.category_id, r.category_name) for r in rules], [('actual-api-id', korean)])
+                self.assertEqual(cleanup_auto_mappings(rules, [])[0], rules)
+                search.reset_mock()
+                self.assertEqual(self.mapper.discover([process], rules, search), ([], []))
+                search.assert_not_called()
+                self.mapper.clear_search_cache()
+                rules, pending = self.mapper.discover([process.upper()], [], Mock(return_value=[]))
+                self.assertEqual(rules, [])
+                self.assertEqual(pending[0]['reason'], 'category-not-found')
 
     def test_shared_filename_never_guesses_from_category_search(self):
         self.mapper.entries['celeste.exe'].append({'name': 'Another Game', 'aliases': []})

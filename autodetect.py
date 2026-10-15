@@ -74,6 +74,7 @@ LOCALIZED_SEARCH_OVERRIDES = {
     'vrchat.exe': ('VR챗',),
     'ride-win64-shipping.exe': ('RV 데어 옛?',),
     'mimesis.exe': ('미메시스',),
+    'smilemo.exe': ('스마일모',),
 }
 
 # Discord lists Pratfall (1468444820484784333) without any executables.
@@ -608,6 +609,9 @@ def cleanup_auto_mappings(auto_rules, auto_pending, manual_rules=None):
         known_names = [verified.get('name', ''), *verified.get('aliases', [])]
         compatibility_aliases = (verified.get('aliases', []) if verified and normalize_name(rule.game_name)
                                  in {normalize_name(n) for n in known_names if n} else [])
+        if normalize_name(rule.game_name) == normalize_name(valid_processes[0][:-4]):
+            compatibility_aliases = [*compatibility_aliases,
+                                     *LOCALIZED_SEARCH_OVERRIDES.get(valid_processes[0].casefold(), ())]
         # Remove old auto-generated mappings that are not identity-safe. Explicit
         # category choices are preserved because they represent a user's decision.
         if (rule.game_name and '사용자 카테고리 선택' not in str(rule.match_source or '') and
