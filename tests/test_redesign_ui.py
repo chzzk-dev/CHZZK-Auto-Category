@@ -116,11 +116,50 @@ class ModernUiTests(unittest.TestCase):
             w.append_log(f'[게임 감지] Game{i}.exe')
         self.assertEqual(len(w.recent_activity), 5)
         self.assertNotIn('Game0.exe', w.dashboard_activity.text())
+        messages = [message.text() for row, stamp, message in w.dashboard_activity_rows]
+        self.assertEqual(len(messages), 5)
+        self.assertIn('Game5.exe', messages[0])
+        self.assertIn('Game9.exe', messages[-1])
+        self.assertFalse(any('Game0.exe' in message for message in messages))
         self.assertNotIn('topsecret', redact('Client-Secret=topsecret token info'))
         w.log_filter.setCurrentText('업데이트')
         w.append_log('[업데이트] 확인 완료')
         self.assertIn('업데이트', w.log.toPlainText())
         self.assertNotIn('Game', w.log.toPlainText())
+
+    def test_dashboard_compact_rows_align_at_minimum_and_default_sizes(self):
+        from PySide6.QtWidgets import QPushButton
+        w = self.window
+        for i in range(5):
+            w.append_log(f'[게임 감지] Game{i}.exe')
+        w.show()
+        for width, height in ((1200, 820), (1360, 860), (1440, 960)):
+            w.resize(width, height)
+            for running in (False, True):
+                if running:
+                    w.on_event({'kind': 'pipeline_state', 'data': {'key': 'mc',
+                        'process': 'Minecraft.exe', 'game_name': 'Minecraft',
+                        'category_name': '마인크래프트', 'stage': '연결 완료',
+                        'running': True, 'representative': True}})
+                else:
+                    w.on_event({'kind': 'detected_games', 'data': []})
+                self.app.processEvents()
+                cards = w.dashboard_summary_cards
+                self.assertLessEqual(max(c.width() for c in cards) - min(c.width() for c in cards), 1)
+                self.assertEqual(len({c.y() for c in cards}), 1)
+                hero, activity = w.dashboard_game_card, w.dashboard_activity_card
+                self.assertGreater(hero.y(), max(c.geometry().bottom() for c in cards))
+                self.assertGreater(activity.y(), hero.geometry().bottom())
+                self.assertEqual(hero.width(), activity.width())
+                self.assertEqual(hero.x(), activity.x())
+                self.assertLess(hero.height(), 280 if running else 220)
+                self.assertEqual(w.dashboard.verticalScrollBar().maximum(), 0)
+                self.assertEqual(w.dashboard.horizontalScrollBar().maximum(), 0)
+                for panel in (hero, activity):
+                    for button in panel.findChildren(QPushButton):
+                        self.assertTrue(panel.rect().contains(button.geometry()))
+                        self.assertLess(button.width(), panel.width() // 3)
+        w.hide()
 
     def test_tray_navigation_restoration_maps_old_shortcuts(self):
         w = self.window
@@ -223,7 +262,7 @@ class ModernUiTests(unittest.TestCase):
     def test_settings_use_switches_and_official_api_is_mandatory(self):
         from ui_components import ToggleSwitch
         w = self.window
-        self.assertEqual((w.width(), w.height()), (1440, 960))
+        self.assertEqual((w.width(), w.height()), (1360, 860))
         for name in ('auto_detect', 'only_when_live', 'auto_start_change', 'autostart', 'notify', 'auto_update', 'allow_prerelease'):
             self.assertIsInstance(getattr(w, name), ToggleSwitch)
         self.assertTrue(w.chzzk_open_enabled.isChecked())

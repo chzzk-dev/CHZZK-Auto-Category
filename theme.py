@@ -37,6 +37,13 @@ QFrame#panelCard QCheckBox, QFrame#settingsCard QCheckBox { color:#F1EFE9; }
 QLabel#statusCardTitle { font-size:12px; }
 QLabel#statusCardValue { font-size:20px; font-weight:700; }
 QLabel#heroGame { color:#F5F3EE; font-size:30px; font-weight:800; }
+QFrame[dashboardCard="true"] { border-width:4px; border-radius:16px; }
+QFrame[dashboardCard="true"] QLabel#heroGame { font-size:24px; }
+QFrame[dashboardCard="true"] QLabel#dashboardDetailValue { color:#F1EFE9; font-size:14px; font-weight:600; }
+QFrame[dashboardCard="true"] QLabel#dashboardTime { color:#B6B2A8; font-size:11px; }
+QFrame[dashboardCard="true"] QLabel#dashboardActivityText { color:#F1EFE9; font-size:12px; }
+QFrame#dashboardActivityRow { background:transparent; border:none; border-bottom:1px solid #505050; }
+QPushButton#dashboardAction { min-height:20px; padding:5px 10px; font-size:12px; border-radius:8px; }
 QLabel#inlineStatus, QLabel#pendingBadge { color:#F1EFE9; background:#414141; border:2px solid white; border-radius:10px; padding:10px; }
 QLabel#emptyRules, QLabel#emptyPending { background:@card; color:#C7C4BC; padding:24px; border:5px solid white; border-radius:18px; }
 QPushButton, QToolButton { color:#252525; background:#EDEBE4; border:2px solid white; border-radius:10px; padding:8px 12px; min-height:22px; }

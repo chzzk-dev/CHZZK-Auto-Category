@@ -33,7 +33,7 @@ def main():
         assert w.pages.count() == w.nav.count() == 6
         assert validate_icons()
         checks = []
-        for width, height in ((1200, 820), (1440, 960)):
+        for width, height in ((1200, 820), (1360, 860), (1440, 960)):
             w.resize(width, height)
             for i in range(6):
                 w.nav.setCurrentRow(i)
@@ -41,6 +41,12 @@ def main():
                 page = w.pages.currentWidget()
                 assert page.width() > 0 and page.height() > 0
                 assert w.page_title.geometry().intersects(w.toggle_button.geometry()) is False
+                if i == 0:
+                    cards = w.dashboard_summary_cards
+                    assert max(c.width() for c in cards) - min(c.width() for c in cards) <= 1
+                    assert w.dashboard_game_card.height() < 220
+                    assert w.dashboard_activity_card.y() > w.dashboard_game_card.geometry().bottom()
+                    assert w.dashboard.horizontalScrollBar().maximum() == 0
                 assert w.grab().save(str(destination / f'page-{i}-{width}.png'))
                 checks.append({'page': i, 'width': width, 'height': height, 'title': w.page_title.text()})
         w.tray_popup.show()
@@ -56,7 +62,7 @@ def main():
         w.deleteLater()
         app.processEvents()
     (destination / 'checks.json').write_text(json.dumps(checks, ensure_ascii=False, indent=2), encoding='utf-8')
-    print(f'Qt scale {os.environ.get("QT_SCALE_FACTOR", "1")}: 12 page/size renders, icons, popup and restore passed')
+    print(f'Qt scale {os.environ.get("QT_SCALE_FACTOR", "1")}: 18 page/size renders, dashboard alignment, icons, popup and restore passed')
 
 
 if __name__ == '__main__':

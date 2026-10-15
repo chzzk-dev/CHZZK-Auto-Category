@@ -751,7 +751,7 @@ class ExistingWindow(QMainWindow):
         self.setObjectName('appWindow')
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        self.resize(1440, 960)
+        self.resize(1360, 860)
         self.setMinimumSize(1200, 820)
 
         root = QWidget()

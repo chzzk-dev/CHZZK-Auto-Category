@@ -271,36 +271,101 @@ class ModernWindowMixin:
 
     def build_dashboard(self):
         page = QWidget()
-        layout = QGridLayout(page)
+        page.setObjectName('dashboardPage')
+        layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 4, 0, 0)
-        layout.setSpacing(16)
+        layout.setSpacing(12)
         self.dashboard_values = {}
-        hero, box = card('현재 실행 중인 게임')
-        self.dashboard_game = label('현재 실행 중인 게임이 없습니다.', 'heroGame')
-        self.dashboard_game_meta = label('게임을 실행하면 자동으로 감지하여 방송 카테고리를 검색합니다.')
-        box.addStretch(1)
-        box.addWidget(self.dashboard_game)
-        box.addWidget(self.dashboard_game_meta)
-        box.addStretch(1)
-        box.addWidget(action('게임 목록 관리', lambda: self.nav.setCurrentRow(1), 'games'))
-        layout.addWidget(hero, 0, 0, 2, 2)
-        positions = {'extension': (0, 2), 'automation': (1, 2), 'game': (2, 0), 'category': (2, 1)}
-        for key, title in (('automation', '자동화 상태'), ('game', '감지 및 매칭'),
-                           ('category', '치지직 카테고리'), ('extension', '브라우저 확장프로그램')):
+        self.dashboard_summary_cards = []
+        summary = QGridLayout()
+        summary.setSpacing(12)
+        for column, (key, title) in enumerate((('automation', '자동화 상태'),
+                ('category', '치지직 카테고리'), ('extension', '브라우저 확장프로그램'))):
             c, dot, value, meta = self._make_status_card(title, '확인 전', '')
+            c.setProperty('dashboardCard', True)
+            c.layout().setContentsMargins(18, 16, 18, 16)
+            c.layout().setSpacing(8)
             self.dashboard_values[key] = (value, meta, dot)
-            layout.addWidget(c, *positions[key])
+            self.dashboard_summary_cards.append(c)
+            summary.addWidget(c, 0, column)
+            summary.setColumnStretch(column, 1)
+        layout.addLayout(summary)
+
+        detail = QGridLayout()
+        detail.setSpacing(12)
+        detail.setColumnStretch(0, 1)
+        hero, box = card('현재 실행 중인 게임')
+        hero.setProperty('dashboardCard', True)
+        self.dashboard_game_card = hero
+        self.dashboard_game_dot = QLabel()
+        self.dashboard_game_dot.setFixedSize(16, 16)
+        title = box.takeAt(0).widget()
+        header = QHBoxLayout()
+        header.setSpacing(8)
+        header.addWidget(self.dashboard_game_dot)
+        header.addWidget(title, 1)
+        manage = action('게임 관리', lambda: self.nav.setCurrentRow(1), 'games')
+        manage.setObjectName('dashboardAction')
+        header.addWidget(manage)
+        box.addLayout(header)
+        self.dashboard_game = label('현재 실행 중인 게임이 없습니다.', 'heroGame')
+        box.addWidget(self.dashboard_game)
+        self.dashboard_empty_hint = label('게임을 실행하면 자동으로 감지하여 방송 카테고리를 검색합니다.')
+        box.addWidget(self.dashboard_empty_hint)
+        self.dashboard_game_details = QWidget()
+        fields = QGridLayout(self.dashboard_game_details)
+        fields.setContentsMargins(0, 8, 0, 0)
+        fields.setHorizontalSpacing(18)
+        fields.setVerticalSpacing(16)
+        self.dashboard_process = label('', 'dashboardDetailValue')
+        self.dashboard_target = label('', 'dashboardDetailValue')
+        self.dashboard_method = label('Discord 게임 목록', 'dashboardDetailValue')
+        self.dashboard_game_meta = label('', 'dashboardDetailValue')
+        for i, (text, value) in enumerate((('실행 파일', self.dashboard_process),
+                ('연결 카테고리', self.dashboard_target), ('감지 방식', self.dashboard_method),
+                ('감지 및 매칭', self.dashboard_game_meta))):
+            field = QVBoxLayout()
+            field.setSpacing(5)
+            field.addWidget(label(text, 'statusCardTitle'))
+            field.addWidget(value)
+            fields.addLayout(field, 0, i)
+            fields.setColumnStretch(i, 1)
+        box.addWidget(self.dashboard_game_details)
+        box.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.dashboard_values['game'] = (self.dashboard_game, self.dashboard_game_meta,
+                                         self.dashboard_game_dot)
+        detail.addWidget(hero, 0, 0)
         activity, box = card('최근 활동')
+        activity.setProperty('dashboardCard', True)
+        self.dashboard_activity_card = activity
+        title = box.takeAt(0).widget()
+        header = QHBoxLayout()
+        header.addWidget(title, 1)
+        logs = action('전체 로그', lambda: self.nav.setCurrentRow(5), 'logs')
+        logs.setObjectName('dashboardAction')
+        header.addWidget(logs)
+        box.addLayout(header)
         self.dashboard_activity = label('아직 기록된 활동이 없습니다.')
         box.addWidget(self.dashboard_activity)
-        box.addStretch(1)
-        box.addWidget(action('전체 로그 보기', lambda: self.nav.setCurrentRow(5), 'logs'))
-        layout.addWidget(activity, 2, 2)
-        for i in range(3):
-            layout.setColumnStretch(i, 1)
-        layout.setRowStretch(0, 1)
-        layout.setRowStretch(1, 1)
-        layout.setRowStretch(2, 1)
+        self.dashboard_activity_rows = []
+        for _ in range(5):
+            row = QFrame()
+            row.setObjectName('dashboardActivityRow')
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(0, 8, 0, 8)
+            row_layout.setSpacing(10)
+            stamp = label('', 'dashboardTime')
+            stamp.setFixedWidth(54)
+            message = label('', 'dashboardActivityText')
+            row_layout.addWidget(stamp, 0, Qt.AlignmentFlag.AlignTop)
+            row_layout.addWidget(message, 1)
+            box.addWidget(row)
+            self.dashboard_activity_rows.append((row, stamp, message))
+        box.setSpacing(0)
+        box.setAlignment(Qt.AlignmentFlag.AlignTop)
+        detail.addWidget(activity, 1, 0)
+        layout.addLayout(detail)
+        layout.addStretch(1)
         return scroll_page(page)
 
     def representative_game(self):
@@ -321,17 +386,18 @@ class ModernWindowMixin:
         self.sidebar_auto_state.setText(state)
         set_button_icon(self.toggle_button, 'pause' if self.enabled else 'start', '#FFFFFF')
         g = self.representative_game()
-        self.dashboard_values['game'][0].setText(g.get('game_name') or g.get('process') if g else '감지된 게임 없음')
-        self.dashboard_values['game'][1].setText(g.get('stage', '감지됨') if g else '게임 실행을 기다립니다')
+        self.dashboard_game_details.setVisible(bool(g))
+        self.dashboard_empty_hint.setVisible(not g)
         if g:
             self.dashboard_game.setText(g.get('game_name') or g.get('process') or '')
-            self.dashboard_game_meta.setText('\n'.join([
-                '실행 파일: ' + g.get('process', ''), '카테고리: ' + g.get('category_name', '확인 중'),
-                '감지 방식: Discord 공개 게임 목록 + 실행 파일 이름', '매칭 상태: ' + g.get('stage', '감지됨')]))
+            self.dashboard_process.setText(g.get('process') or '확인 중')
+            self.dashboard_process.setToolTip(g.get('process') or '')
+            self.dashboard_target.setText(g.get('category_name') or '확인 중')
+            self.dashboard_game_meta.setText(g.get('stage', '감지됨'))
         else:
             self.dashboard_game.setText('현재 실행 중인 게임이 없습니다.' if not any(x.get('running') for x in self.runtime_games.values())
                                         else '여러 게임이 실행 중입니다. 대표 게임을 선택해 주세요.')
-            self.dashboard_game_meta.setText('게임을 실행하면 자동으로 감지하여 방송 카테고리를 검색합니다.')
+            self.dashboard_game_meta.setText('게임 실행을 기다립니다')
         self.dashboard_values['category'][0].setText((self.last_category or '아직 확인하지 않음') if self.connection_verified else '확인할 수 없음' if self.last_category else '아직 확인하지 않음')
         self.dashboard_values['category'][1].setText('마지막 적용: ' + (self.last_applied_at or '없음') + (' · 마지막 확인: ' + self.last_category if self.last_category and not self.connection_verified else ''))
         info = self.bridge.extension_status()
@@ -340,7 +406,15 @@ class ModernWindowMixin:
         for key, (value, meta, dot) in self.dashboard_values.items():
             success = value.text() in ('실행 중', '정상 연결') or key == 'category' and bool(self.last_category)
             dot.setPixmap(app_icon('success' if success else 'clock', TOKENS['success'] if success else TOKENS['muted']).pixmap(16, 16))
-        self.dashboard_activity.setText('\n'.join(self.recent_activity) or '아직 기록된 활동이 없습니다.')
+        self.dashboard_activity.setVisible(not self.recent_activity)
+        for index, (row, stamp, message) in enumerate(self.dashboard_activity_rows):
+            visible = index < len(self.recent_activity)
+            row.setVisible(visible)
+            if visible:
+                time, _, text = self.recent_activity[index].partition(' — ')
+                stamp.setText(time)
+                message.setText(text)
+                message.setToolTip(text)
 
     def build_rules(self):
         page = QWidget()
