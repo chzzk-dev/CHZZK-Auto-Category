@@ -213,6 +213,30 @@ class SteamLookupTests(unittest.TestCase):
 
 
 class SteamKeyStorageTests(unittest.TestCase):
+    def test_bundled_key_requires_no_user_setup_and_env_names_override(self):
+        with patch('storage.APP_STEAM_WEB_API_KEY', KEY), patch('storage.sys.platform', 'linux'), \
+                patch.dict(os.environ, {'STEAM_WEB_API': '', 'STEAM_WEB_API_KEY': ''}):
+            self.assertEqual(get_steam_api_key(), KEY)
+            with patch.dict(os.environ, {'STEAM_WEB_API_KEY': 'b'*32}):
+                self.assertEqual(get_steam_api_key(), 'b'*32)
+                with patch.dict(os.environ, {'STEAM_WEB_API': 'c'*32}):
+                    self.assertEqual(get_steam_api_key(), 'c'*32)
+
+    def test_personal_key_survives_upgrade_and_deleting_it_restores_bundled_key(self):
+        with tempfile.TemporaryDirectory() as d, patch.dict(os.environ, {
+                'LOCALAPPDATA': d, 'STEAM_WEB_API': '', 'STEAM_WEB_API_KEY': ''}), \
+                patch('storage.sys.platform', 'win32'), patch('storage.APP_STEAM_WEB_API_KEY', 'b'*32), \
+                patch('storage._dpapi_protect', side_effect=lambda b: b[::-1]), \
+                patch('storage._dpapi_unprotect', side_effect=lambda b: b[::-1]):
+            self.assertEqual(get_steam_api_key(), 'b'*32)
+            save_steam_api_key(KEY)
+            self.assertEqual(get_steam_api_key(), KEY)
+            save_steam_api_key('')
+            self.assertEqual(get_steam_api_key(), 'b'*32)
+            with patch('storage._dpapi_unprotect', side_effect=ValueError('invalid')):
+                (Path(d)/'ChzzkAutoCategory/steam_key.dat').write_bytes(b'invalid')
+                self.assertEqual(get_steam_api_key(), 'b'*32)
+
     def test_key_is_not_stored_in_config_and_windows_storage_round_trip(self):
         config = normalize_config({'steam_api_key': KEY, 'rules': [{'saved': 'preserved'}]})
         self.assertNotIn('steam_api_key', config)

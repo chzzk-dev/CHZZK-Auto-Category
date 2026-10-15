@@ -64,6 +64,21 @@ class ReleaseHistoryTests(unittest.TestCase):
 
 
 class CredentialStagingTests(unittest.TestCase):
+    def test_steam_secret_uses_exact_actions_name_and_only_changes_staging(self):
+        source = "APP_STEAM_WEB_API_KEY = ''\nOTHER_SETTING = True\n"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'storage.py'
+            path.write_text(source)
+            value = "synthetic-'quote'-secret"
+            staged = staged_source('storage', path, {'STEAM_WEB_API': value})
+            namespace = {}
+            exec(compile(staged, '<staging>', 'exec'), namespace)
+            self.assertEqual(namespace['APP_STEAM_WEB_API_KEY'], value)
+            self.assertTrue(namespace['OTHER_SETTING'])
+            self.assertEqual(path.read_text(), source)
+            self.assertEqual(staged_source('storage', path, {}), source)
+            self.assertEqual(staged_source('worker', path, {'STEAM_WEB_API': value}), source)
+
     def test_credentials_are_injected_into_staging_without_changing_public_source(self):
         source = "import os\nAPP_CLIENT_ID = os.environ.get('CHZZK_CLIENT_ID', '')\nAPP_CLIENT_SECRET = os.environ.get('CHZZK_CLIENT_SECRET', '')\n"
         with tempfile.TemporaryDirectory() as directory:

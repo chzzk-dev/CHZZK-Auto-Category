@@ -49,22 +49,52 @@ class ModernUiTests(unittest.TestCase):
         for i in range(6):
             self.assertFalse(self.window.nav.item(i).icon().isNull())
 
-    def test_steam_key_is_masked_and_sent_to_worker_without_config_storage(self):
-        from PySide6.QtWidgets import QLineEdit
+    def test_steam_connection_has_no_credential_controls(self):
         w = self.window
-        self.assertEqual(w.steam_key_input.echoMode(), QLineEdit.EchoMode.Password)
-        w.steam_key_input.setText('test-invalid')
+        page = w.connection_tabs.widget(2)
+        from PySide6.QtWidgets import QLineEdit, QPushButton
+        self.assertEqual(page.findChildren(QLineEdit), [])
+        captions = [button.text() for button in page.findChildren(QPushButton)]
+        self.assertFalse(any('키' in caption or '발급' in caption or '삭제' in caption for caption in captions))
         with patch.object(w.worker, 'submit') as submit:
             w.save_steam_connection()
-            submit.assert_not_called()
-        w.steam_key_input.setText('a'*32)
-        with patch.object(w, 'persist', return_value=True), patch.object(w.worker, 'submit') as submit:
-            w.save_steam_connection()
-            submit.assert_called_once_with('steam_test', {'key': 'a'*32})
-        self.assertEqual(w.steam_key_input.text(), '')
+            submit.assert_called_once_with('steam_test')
         self.assertNotIn('steam_api_key', w.config)
-        w.on_event({'kind': 'steam_status', 'ok': False, 'text': 'Steam API 인증을 확인해 주세요.'})
-        self.assertIn('인증', w.steam_status.text())
+        w.on_event({'kind': 'steam_status', 'ok': False, 'text': 'Steam 연결을 확인해 주세요.'})
+        self.assertIn('연결', w.steam_status.text())
+
+    def test_steam_checks_default_key_once_without_personal_input(self):
+        w = self.window
+        with patch('modern_ui.get_steam_api_key', return_value='a'*32), \
+                patch.object(w.worker, 'submit') as submit:
+            w.ensure_steam_api_check()
+            submit.assert_not_called()  # Preview must stay offline.
+            w.preview = False
+            try:
+                w.ensure_steam_api_check()
+                w.ensure_steam_api_check()
+                submit.assert_called_once_with('steam_test')
+            finally:
+                w.preview = True
+
+    def test_steam_toggle_persists_immediately_and_disabled_does_not_probe(self):
+        w = self.window
+        with patch.object(w, 'persist', return_value=True) as persist, \
+                patch.object(w.worker, 'submit') as submit:
+            w.steam_enabled.setChecked(False)
+            persist.assert_called_once()
+            w.save_steam_connection()
+            submit.assert_not_called()
+        self.assertFalse(w.config['steam_lookup_enabled'])
+        self.assertIn('꺼져', w.steam_status.text())
+
+    def test_steam_toggle_restores_previous_setting_when_save_fails(self):
+        w = self.window
+        with patch.object(w, 'persist', return_value=False), patch.object(w.worker, 'submit') as submit:
+            w.steam_enabled.setChecked(False)
+            submit.assert_not_called()
+        self.assertTrue(w.config['steam_lookup_enabled'])
+        self.assertTrue(w.steam_enabled.isChecked())
 
     def test_model_table_filters_and_priority_selection(self):
         w = self.window

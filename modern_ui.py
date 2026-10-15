@@ -30,7 +30,7 @@ PAGES = (
 
 
 def run_packaged_ui_smoke(destination):
-    """Offline diagnostic used by Windows CI, including bundled icon fonts."""
+    """UI diagnostic; explicit CI opt-in also verifies the compiled Steam key online."""
     import json
     import os
     import sys
@@ -58,15 +58,28 @@ def run_packaged_ui_smoke(destination):
             w.connection_tabs.setCurrentIndex(2)
             w.nav.setCurrentRow(3)
             app.processEvents()
-            assert w.steam_key_input.echoMode() == QLineEdit.EchoMode.Password
+            assert not w.findChildren(QLineEdit, 'steamApiKeyInput')
             assert w.grab().save(str(destination / 'steam-connection.png'))
-            native = [name for name in ('main', 'modern_ui', 'app_icons', 'theme', 'automation', 'worker', 'steam_lookup')
+            native = [name for name in ('main', 'modern_ui', 'app_icons', 'theme', 'automation', 'worker', 'steam_lookup', 'storage')
                       if getattr(sys.modules.get(name), '__file__', '').endswith(('.pyd', '.so'))]
             if getattr(sys, 'frozen', False):
-                assert len(native) == 7, 'A first-party native module was replaced with source'
-            (destination / 'packaged-checks.json').write_text(json.dumps(
-                {'icons': True, 'pages': 6, 'native_modules': native, 'frozen': bool(getattr(sys, 'frozen', False))},
-                indent=2), encoding='utf-8')
+                assert len(native) == 8, 'A first-party native module was replaced with source'
+            checks = {'icons': True, 'pages': 6, 'native_modules': native,
+                      'frozen': bool(getattr(sys, 'frozen', False))}
+            if os.environ.get('CHZZK_VERIFY_STEAM_API') == 'true':
+                from storage import APP_STEAM_WEB_API_KEY
+                from steam_lookup import SteamResolver, valid_key
+                assert valid_key(APP_STEAM_WEB_API_KEY), 'Bundled Steam key is missing'
+                assert get_steam_api_key() == APP_STEAM_WEB_API_KEY, 'Steam smoke must use the bundled key'
+                probe = SteamResolver(get_steam_api_key(), Path(directory) / 'steam-smoke.json')
+                try:
+                    assert probe.test_connection(), 'Steam API authentication failed'
+                    record = probe.resolve({'id': 'ci-mimesis', 'name': 'MIMESIS', 'aliases': []}, 'mimesis.exe')
+                    assert record and record['appid'] == 2827200 and record['localized_name'] == '미메시스', 'Steam localized lookup failed'
+                finally:
+                    probe.close()
+                checks.update(steam_builtin_key=True, steam_api_connected=True, steam_localized_lookup=True)
+            (destination / 'packaged-checks.json').write_text(json.dumps(checks, indent=2), encoding='utf-8')
             w.quitting = True
             w.close()
             w.deleteLater()
@@ -244,6 +257,16 @@ class ModernWindowMixin:
         self.log_filter.currentTextChanged.connect(self.render_logs)
         self.log_entries = deque(maxlen=1000)
         QTimer.singleShot(0, self.ensure_official_api_check)
+        self.steam_check_requested = False
+        QTimer.singleShot(0, self.ensure_steam_api_check)
+
+    def ensure_steam_api_check(self):
+        if (self.preview or self.steam_check_requested
+                or not self.config.get('steam_lookup_enabled', True) or not get_steam_api_key()):
+            return
+        self.steam_check_requested = True
+        self.steam_status.setText('Steam API 연결을 자동 확인하고 있습니다…')
+        self.worker.submit('steam_test')
 
     def ensure_official_api_check(self):
         if self.preview or self.official_check_requested:
@@ -261,46 +284,43 @@ class ModernWindowMixin:
         self.steam_enabled = ToggleSwitch('Steam 한국어 매칭')
         self.steam_enabled.setChecked(self.config.get('steam_lookup_enabled', True))
         box.addWidget(setting_row('Steam 한국어 매칭', 'Steam에 없는 게임은 기존 방식으로 매칭합니다.', self.steam_enabled))
-        self.steam_key_input = QLineEdit()
-        self.steam_key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.steam_key_input.setMaxLength(32)
-        self.steam_key_input.setPlaceholderText('Steam Web API 키 · 32자리')
-        self.steam_key_input.setAccessibleName('Steam Web API 키')
-        box.addWidget(self.steam_key_input)
-        box.addWidget(label('키는 이 Windows 계정에서 보호 저장합니다. Steam 로그인이나 Steam ID 입력은 필요하지 않습니다.'))
-        self.steam_status = label('키 저장됨 · 연결 확인 대기' if get_steam_api_key() else 'API 키를 입력하면 한국어 이름 조회를 사용합니다.', 'inlineStatus')
+        box.addWidget(label('별도의 로그인이나 키 입력 없이 자동으로 연결합니다.'))
+        status = ('자동 설정됨 · 연결 확인 대기' if get_steam_api_key()
+                  else '연결 정보를 확인할 수 없습니다. 최신 공식 설치본을 설치해 주세요.')
+        if not self.steam_enabled.isChecked():
+            status = 'Steam 한국어 매칭이 꺼져 있습니다.'
+        self.steam_status = label(status, 'inlineStatus')
         box.addWidget(self.steam_status)
         row = QHBoxLayout()
-        row.addWidget(action('저장 · 연결 확인', self.save_steam_connection, 'connections', True))
-        row.addWidget(action('저장된 키 삭제', self.forget_steam_connection, 'delete'))
-        row.addWidget(action('API 키 발급 페이지', self.open_steam_key_page, 'info'))
+        row.addWidget(action('연결 다시 확인', self.save_steam_connection, 'connections', True))
         row.addStretch()
         box.addLayout(row)
+        self.steam_enabled.toggled.connect(self.save_steam_preference)
         layout.addWidget(panel)
         layout.addStretch()
         return scroll_page(page)
 
-    def open_steam_key_page(self):
-        from PySide6.QtGui import QDesktopServices
-        from PySide6.QtCore import QUrl
-        QDesktopServices.openUrl(QUrl('https://steamcommunity.com/dev/apikey'))
+    def save_steam_preference(self, enabled):
+        previous = self.config.get('steam_lookup_enabled', True)
+        self.config['steam_lookup_enabled'] = bool(enabled)
+        if not self.persist():
+            self.config['steam_lookup_enabled'] = previous
+            self.steam_enabled.blockSignals(True)
+            self.steam_enabled.setChecked(previous)
+            self.steam_enabled.blockSignals(False)
+            return
+        if enabled:
+            self.steam_check_requested = False
+            self.ensure_steam_api_check()
+        else:
+            self.steam_status.setText('Steam 한국어 매칭이 꺼져 있습니다.')
 
     def save_steam_connection(self):
-        from steam_lookup import valid_key
-        key = self.steam_key_input.text().strip()
-        if key and not valid_key(key):
-            self.steam_status.setText('32자리 Steam Web API 키를 입력해 주세요.')
+        if not self.config.get('steam_lookup_enabled', True):
+            self.steam_status.setText('Steam 한국어 매칭이 꺼져 있습니다.')
             return
-        self.config['steam_lookup_enabled'] = self.steam_enabled.isChecked()
-        if not self.persist():
-            return
-        self.steam_key_input.clear()
-        self.steam_status.setText('Steam API 연결을 확인하고 있습니다…')
-        self.worker.submit('steam_test', {'key': key})
-
-    def forget_steam_connection(self):
-        self.steam_key_input.clear()
-        self.worker.submit('steam_forget')
+        self.steam_status.setText('Steam 연결을 확인하고 있습니다…')
+        self.worker.submit('steam_test')
 
     def switch_page(self, index):
         if not getattr(self, 'ui_ready', False):

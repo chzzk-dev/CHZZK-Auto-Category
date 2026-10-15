@@ -17,6 +17,8 @@ AUTOSTART_VALUE = 'ChzzkAutoCategory'
 AUTOSTART_KEY = r'Software\Microsoft\Windows\CurrentVersion\Run'
 STARTUP_APPROVED_KEY = r'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
 PRODUCT_NAME = 'CHZZK Auto Category'
+# Filled only in ignored native-build staging by build_protected.staged_source.
+APP_STEAM_WEB_API_KEY = ''
 
 DEFAULT_CONFIG = {
     'setup_completed': False,
@@ -246,17 +248,24 @@ def save_steam_api_key(value):
     temp.replace(path)
 
 
+def steam_environment_key():
+    return (os.environ.get('STEAM_WEB_API', '').strip()
+            or os.environ.get('STEAM_WEB_API_KEY', '').strip())
+
+
 def get_steam_api_key():
-    value = os.environ.get('STEAM_WEB_API_KEY', '').strip()
+    value = steam_environment_key()
     if value:
         return value
-    if sys.platform != 'win32':
-        return ''
-    try:
-        protected = base64.b64decode((data_dir() / 'steam_key.dat').read_bytes())
-        return _dpapi_unprotect(protected).decode('utf-8').strip()
-    except (OSError, ValueError, UnicodeError):
-        return ''
+    if sys.platform == 'win32':
+        try:
+            protected = base64.b64decode((data_dir() / 'steam_key.dat').read_bytes())
+            value = _dpapi_unprotect(protected).decode('utf-8').strip()
+            if value:
+                return value
+        except (OSError, ValueError, UnicodeError):
+            pass
+    return APP_STEAM_WEB_API_KEY.strip()
 
 
 def autostart_command(executable=None):

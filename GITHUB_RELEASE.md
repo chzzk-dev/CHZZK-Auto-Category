@@ -2,13 +2,13 @@
 
 배포 저장소는 https://github.com/chzzk-dev/CHZZK-Auto-Category 입니다. `.github/workflows/windows-release.yml`을 사용합니다.
 
-현재 소스는 앱 4.12.7 / 확장프로그램 0.6.0입니다. 사용자 승인에 따라 정식 최신 릴리스로 게시합니다. 모든 Windows 검증 게이트가 통과해야 게시됩니다.
+현재 소스는 앱 4.12.8 / 확장프로그램 0.6.0입니다. 사용자 승인에 따라 정식 최신 릴리스로 게시합니다. 모든 Windows 검증 게이트가 통과해야 게시됩니다.
 
 ## 최초 설정
 
-저장소 **Settings → Secrets and variables → Actions → New repository secret**에서 `CHZZK_CLIENT_ID`와 `CHZZK_CLIENT_SECRET`을 각각 등록하세요. workflow는 두 값 모두 Actions Secret에서 읽습니다. Secret 값은 소스, 커밋, Markdown에 쓰지 않습니다.
+저장소 **Settings → Secrets and variables → Actions → New repository secret**에서 `CHZZK_CLIENT_ID`, `CHZZK_CLIENT_SECRET`, `STEAM_WEB_API`를 각각 등록하세요. Steam Secret 이름은 정확히 `STEAM_WEB_API`입니다. workflow는 세 값 모두 Actions Secret에서 읽습니다. Secret 값은 소스, 커밋, Markdown에 쓰지 않습니다.
 
-Secret이 없는 일반 빌드도 테스트 및 MSI 생성은 가능합니다. 그 빌드에는 공식 API 연결 정보가 포함되지 않습니다. 실제 릴리스 게시에는 두 Secret 설정이 모두 필수입니다. 앱 설정 화면에 ID/Secret 입력란은 추가하지 않습니다.
+Secret이 없는 일반 빌드도 테스트 및 MSI 생성은 가능합니다. 그 빌드에는 공식 API 연결 정보가 포함되지 않습니다. 실제 릴리스 게시에는 세 Secret 설정이 모두 필수입니다. Steam 키는 무시되는 Cython 빌드 스테이징에만 주입하고 컴파일하며, 추적되는 원본 소스를 바꾸지 않습니다. 실제 EXE의 기본 키 인증과 MIMESIS 한국어 조회가 성공해야 게시합니다. 앱 설정 화면에 ID/Secret 입력란은 추가하지 않습니다.
 
 ## 새 버전 게시
 

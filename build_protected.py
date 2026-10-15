@@ -59,13 +59,15 @@ def dependencies(entry):
 def staged_source(name, path, environ=None):
     """Inject build credentials only into ignored Cython staging, never tracked files."""
     source = path.read_text(encoding='utf-8-sig')
-    if name != 'chzzk_open':
-        return source
     environ = os.environ if environ is None else environ
-    values = {
-        'APP_CLIENT_ID': environ.get('CHZZK_CLIENT_ID', '').strip(),
-        'APP_CLIENT_SECRET': environ.get('CHZZK_CLIENT_SECRET', '').strip(),
+    credentials = {
+        'chzzk_open': {'APP_CLIENT_ID': 'CHZZK_CLIENT_ID', 'APP_CLIENT_SECRET': 'CHZZK_CLIENT_SECRET'},
+        'storage': {'APP_STEAM_WEB_API_KEY': 'STEAM_WEB_API'},
     }
+    values = {target: environ.get(variable, '').strip()
+              for target, variable in credentials.get(name, {}).items()}
+    if not values:
+        return source
     tree = ast.parse(source)
     lines = source.splitlines(keepends=True)
     for node in reversed(tree.body):

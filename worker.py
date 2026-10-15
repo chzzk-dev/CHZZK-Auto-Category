@@ -10,7 +10,7 @@ from autodetect import (DiscordAutoMapper, serialize_rules, cleanup_auto_mapping
                         is_ignored_process, detectable_running_processes, game_process_details,
                         category_choice_process_key, league_rule_processes)
 from process_detect import process_names as snapshot_process_names
-from storage import discord_cache_file, data_dir, get_steam_api_key, save_steam_api_key
+from storage import discord_cache_file, data_dir, get_steam_api_key, save_steam_api_key, steam_environment_key
 from steam_lookup import SteamResolver, SteamLookupError, valid_key
 from automation import MatchingPipeline, VerifiedCache, choose_representative
 from datetime import datetime
@@ -663,8 +663,8 @@ class Worker(QThread):
                 if key:
                     if not valid_key(key):
                         raise SteamLookupError('32자리 Steam Web API 키를 입력해 주세요.')
-                    if os.environ.get('STEAM_WEB_API_KEY', '').strip() not in ('', key):
-                        raise SteamLookupError('STEAM_WEB_API_KEY 환경변수 키가 우선합니다. 입력란을 비워 연결을 확인하거나 환경변수 키를 변경해 주세요.')
+                    if steam_environment_key() not in ('', key):
+                        raise SteamLookupError('Steam 환경변수 키가 우선합니다. 입력란을 비워 연결을 확인하거나 환경변수 키를 변경해 주세요.')
                     probe = SteamResolver(key, discord_cache_file().parent / 'steam_titles.json',
                                           cancelled=self.cancel.is_set)
                     try:
@@ -678,7 +678,10 @@ class Worker(QThread):
                 elif self.steam.configured:
                     self.steam.test_connection()
                 else:
-                    probe = SteamResolver(get_steam_api_key(), discord_cache_file().parent / 'steam_titles.json',
+                    default_key = get_steam_api_key()
+                    if not valid_key(default_key):
+                        raise SteamLookupError('Steam 연결 정보를 확인할 수 없습니다. 최신 공식 설치본을 설치해 주세요.')
+                    probe = SteamResolver(default_key, discord_cache_file().parent / 'steam_titles.json',
                                           cancelled=self.cancel.is_set)
                     try:
                         probe.test_connection()
@@ -692,7 +695,7 @@ class Worker(QThread):
         elif name == 'steam_forget':
             save_steam_api_key('')
             self.configure_mapper()
-            self.emit('steam_status', text='저장된 Steam API 키를 삭제했습니다. 환경변수 키가 있으면 계속 사용합니다.')
+            self.emit('steam_status', text='개인 키를 삭제했습니다. 기본 연결 정보가 있으면 자동으로 사용합니다.')
         elif name == 'chzzk_open_test':
             if self.chzzk_open is None or not self.chzzk_open.configured:
                 raise ChzzkOpenAPIError('공식 API 인증 정보가 포함되지 않은 빌드입니다. 최신 공식 설치본을 설치해 주세요.')
