@@ -5,9 +5,27 @@
 
 ## 미배포
 
+- 아직 기록할 변경 사항이 없습니다.
+
+## [4.12.4](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.4) — 2026-10-15 (KST)
+
+### 변경 사항
+
 - 롤토체스 빠른 선택에서 TFT 카테고리의 시즌 부제(콜론 뒤 이름) 때문에 연결에 실패하던 문제를 수정합니다.
 - 기본 이름으로 검색하고 비교하되 실제 검색 결과의 카테고리 ID와 전체 이름을 저장합니다.
 - 다른 게임이나 서로 다른 ID의 후보가 여러 개면 임의로 연결하지 않습니다.
+
+### 커밋
+
+- Match TFT seasonal category subtitles in quick selection for stable 4.12.4 ([7ef7c71](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/7ef7c717e7f615d49d765a723bf2e55e63bb7eb8))
+
+[전체 변경 비교](https://github.com/chzzk-dev/CHZZK-Auto-Category/compare/v4.12.3...v4.12.4)
+
+### 설치 파일
+
+- `ChzzkAutoCategory-4.12.4.msi`
+- `SHA256SUMS.txt`에서 설치 파일의 SHA-256을 확인할 수 있습니다.
+- 기존 MSI 설치본은 새 MSI로 업그레이드하며 사용자 설정을 유지합니다.
 
 ## [4.12.3](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.3) — 2026-10-14 (KST)
 
