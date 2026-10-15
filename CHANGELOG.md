@@ -5,10 +5,30 @@
 
 ## 미배포
 
+- 아직 기록할 변경 사항이 없습니다.
+
+## [4.12.10](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.10) — 2026-10-15 (KST)
+
+### 변경 사항
+
 - 로그를 시간·유형·내용으로 정렬하고 중복 유형 표기를 제거합니다.
 - 분석·검색·검증 중간 과정은 기본 화면에서 숨기고 세부 과정 표시로 확인합니다. 상세 파일 기록은 유지합니다.
 - 동일한 연결 성공과 반복 매칭 결과를 정리하며 실제 연결 오류·복구·카테고리 변경·게임 재실행은 계속 기록합니다.
 - 화면 지우기 후 필터를 바꿔도 지운 기록이 되살아나지 않도록 수정하고 읽던 스크롤 위치를 유지합니다.
+
+### 커밋
+
+- Keep game exit logs reliable across snapshot events \[cancel obsolete builds\] ([97652c2](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/97652c21a0f3cc51b1c7076008a541ed77a3fae3))
+- Preserve one-line copied activity logs \[cancel obsolete builds\] ([06566c5](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/06566c5681d70350fba29726a51b549f2893489c))
+- Simplify activity logs and suppress repeated polling messages in 4.12.10 ([f549bad](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/f549bad4f3a487b565e0de9063fd88056157c997))
+
+[전체 변경 비교](https://github.com/chzzk-dev/CHZZK-Auto-Category/compare/v4.12.9...v4.12.10)
+
+### 설치 파일
+
+- `ChzzkAutoCategory-4.12.10.msi`
+- `SHA256SUMS.txt`에서 설치 파일의 SHA-256을 확인할 수 있습니다.
+- 기존 MSI 설치본은 새 MSI로 업그레이드하며 사용자 설정을 유지합니다.
 
 ## [4.12.9](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.9) — 2026-10-15 (KST)
 
