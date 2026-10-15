@@ -64,6 +64,19 @@ class DetectionLookupTests(unittest.TestCase):
         self.assertEqual(self.mapper.discover(['Celeste.exe'], [rule], search), ([], []))
         search.assert_not_called()
 
+    def test_mimesis_uses_exact_korean_category_and_keeps_actual_id(self):
+        self.mapper.entries = {'mimesis.exe': [{'name': 'MIMESIS', 'aliases': []}]}
+        category = {'categoryId': 'actual-api-id', 'categoryValue': '미메시스', 'categoryType': 'GAME'}
+        search = Mock(return_value=[dict(category, categoryId='other', categoryValue='미메시스 관련 게임'), category])
+        rules, pending = self.mapper.discover(['MIMESIS.exe'], [], search)
+        search.assert_called_once_with('미메시스')
+        self.assertEqual(pending, [])
+        self.assertEqual([(r.category_id, r.category_name) for r in rules], [('actual-api-id', '미메시스')])
+        self.mapper.clear_search_cache()
+        rules, pending = self.mapper.discover(['mimesis.EXE'], [], Mock(return_value=[]))
+        self.assertEqual(rules, [])
+        self.assertEqual(pending[0]['reason'], 'category-not-found')
+
     def test_shared_filename_never_guesses_from_category_search(self):
         self.mapper.entries['celeste.exe'].append({'name': 'Another Game', 'aliases': []})
         self.mapper.resolve_shared_executable = True  # legacy configuration

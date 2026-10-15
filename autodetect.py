@@ -73,6 +73,7 @@ DROP_WORDS = {
 LOCALIZED_SEARCH_OVERRIDES = {
     'vrchat.exe': ('VR챗',),
     'ride-win64-shipping.exe': ('RV 데어 옛?',),
+    'mimesis.exe': ('미메시스',),
 }
 
 

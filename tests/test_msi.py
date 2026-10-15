@@ -13,6 +13,7 @@ from installer.build_msi import NS, ROOT, write_source, validate_version, valida
 import release
 import updater
 import updater_app
+from scripts import windows_msi_smoke
 
 Q = {'w': NS}
 
@@ -55,6 +56,17 @@ class MsiPackageTests(unittest.TestCase):
         after = mapping(self.source('Next.wxs'))
         self.assertTrue(before.items() <= after.items())
         self.assertEqual(len(after), len(before) + 1)
+
+    def test_rebuild_upgrade_check_uses_existing_same_version_msi(self):
+        def release_record(version):
+            return {'tag_name': 'v' + version, 'draft': False, 'prerelease': False,
+                    'assets': [{'name': f'ChzzkAutoCategory-{version}.msi', 'digest': 'sha256:' + 'a'*64}]}
+        output = Mock(stdout=json.dumps([release_record(v) for v in ('4.12.6', '4.12.7', '4.12.8')]))
+        with patch.object(windows_msi_smoke, 'APP_VERSION', '4.12.7'), \
+                patch.object(windows_msi_smoke.subprocess, 'run', return_value=output):
+            for flag, expected in (('false', '4.12.6'), ('true', '4.12.7')):
+                with patch.dict(os.environ, {'REBUILD_RELEASE': flag}):
+                    self.assertEqual(windows_msi_smoke.baseline_release()[0], expected)
 
     def test_modern_ui_does_not_intercept_passive_updates(self):
         root = self.source()

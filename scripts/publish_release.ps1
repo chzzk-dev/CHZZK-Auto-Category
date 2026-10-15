@@ -3,6 +3,7 @@ $version = $env:RELEASE_VERSION
 $tag = $env:RELEASE_TAG
 $repository = $env:GITHUB_REPOSITORY
 $prerelease = $env:RELEASE_PRERELEASE -eq 'true'
+$rebuild = $env:REBUILD_RELEASE -eq 'true'
 $releaseMode = $prerelease.ToString().ToLowerInvariant()
 $makeLatest = (-not $prerelease).ToString().ToLowerInvariant()
 if ($version -notmatch '^\d+\.\d+\.\d+$' -or $tag -notin @($version, "v$version")) { throw 'Invalid release version or tag.' }
@@ -24,18 +25,29 @@ $allReleases = gh api "repos/$repository/releases?per_page=100" | ConvertFrom-Js
 if ($LASTEXITCODE -ne 0) { throw 'Could not read current releases.' }
 foreach ($release in $allReleases) {
     $plain = $release.tag_name -replace '^v', ''
-    if (-not $release.draft -and -not $release.prerelease -and $plain -match '^\d+\.\d+\.\d+$' -and [version]$plain -ge [version]$version) { throw 'An equal or newer stable release is already published. Increase APP_VERSION.' }
+    if (-not $release.draft -and -not $release.prerelease -and $plain -match '^\d+\.\d+\.\d+$' -and [version]$plain -ge [version]$version) {
+        if (-not ($rebuild -and $release.tag_name -eq $tag -and [version]$plain -eq [version]$version -and -not $prerelease)) { throw 'An equal or newer stable release is already published. Increase APP_VERSION or explicitly request a rebuild.' }
+    }
 }
 $existing = @($allReleases | Where-Object { $_.tag_name -eq $tag })
+$originalTagSha = $null
+if ($rebuild -and $existing.Count -gt 0) {
+    $originalTagSha = (gh api "repos/$repository/git/ref/tags/$tag" | ConvertFrom-Json).object.sha
+    if ($LASTEXITCODE -ne 0 -or -not $originalTagSha) { throw 'Could not inspect the existing rebuild tag.' }
+}
 if ($existing.Count -eq 0) {
     gh release create $tag --repo $repository --target $env:BUILD_SOURCE_SHA --title "CHZZK Auto Category $version" --draft --notes-file $notes "--prerelease=$releaseMode"
 } else {
-    if (-not $existing[0].draft) { throw 'Refusing to replace an existing published release.' }
-    gh release edit $tag --repo $repository --notes-file $notes "--prerelease=$releaseMode"
+    if (-not $existing[0].draft -and -not $rebuild) { throw 'Refusing to replace an existing published release.' }
+    gh release edit $tag --repo $repository --draft=true --notes-file $notes "--prerelease=$releaseMode"
 }
 if ($LASTEXITCODE -ne 0) { throw 'Draft release creation/update failed.' }
 gh release upload $tag $msi $checksum $metadata $notes $changelog --repo $repository --clobber
 if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed; the release remains a draft.' }
+if ($originalTagSha) {
+    git push origin "--force-with-lease=refs/tags/${tag}:$originalTagSha" "$($env:BUILD_SOURCE_SHA):refs/tags/$tag"
+    if ($LASTEXITCODE -ne 0) { throw 'The release tag changed concurrently; rebuilt assets remain a draft.' }
+}
 gh release edit $tag --repo $repository --draft=false "--prerelease=$releaseMode" "--latest=$makeLatest"
 if ($LASTEXITCODE -ne 0) { throw 'Publishing the tested release failed.' }
 

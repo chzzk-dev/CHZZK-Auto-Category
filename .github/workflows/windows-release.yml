@@ -18,6 +18,11 @@ on:
         required: true
         type: boolean
         default: false
+      rebuild_release:
+        description: 'Explicitly replace the current same-version release after all checks'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -35,6 +40,7 @@ jobs:
       tag: ${{ steps.resolve.outputs.tag }}
       publish: ${{ steps.resolve.outputs.publish }}
       prerelease: ${{ steps.resolve.outputs.prerelease }}
+      rebuild: ${{ steps.resolve.outputs.rebuild }}
     env:
       QT_QPA_PLATFORM: offscreen
       PYTHONUTF8: '1'
@@ -63,6 +69,7 @@ jobs:
           IS_TAG: ${{ github.ref_type == 'tag' }}
           SHOULD_PUBLISH: ${{ (github.event_name == 'push' && (github.ref_type == 'tag' || github.ref == 'refs/heads/main')) || (github.event_name == 'workflow_dispatch' && inputs.publish_release) }}
           AUTO_PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          REBUILD_RELEASE: ${{ (github.event_name == 'workflow_dispatch' && inputs.publish_release && inputs.rebuild_release) || (github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[rebuild-release]')) }}
           GH_TOKEN: ${{ github.token }}
         run: |
           $argsList = @('scripts/release_notes.py', 'resolve')
@@ -71,6 +78,7 @@ jobs:
           $result = & python @argsList
           if ($LASTEXITCODE -ne 0) { throw 'Version/tag validation failed.' }
           $publish = $env:SHOULD_PUBLISH -eq 'true'
+          $rebuild = $env:REBUILD_RELEASE -eq 'true'
           if ($publish -and $env:AUTO_PUBLISH -eq 'true') {
             $sourceVersion = ($result | Where-Object { $_ -like 'version=*' }) -replace '^version=', ''
             $releases = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
@@ -78,12 +86,13 @@ jobs:
             foreach ($release in $releases) {
               if ($release.draft) { continue }
               $version = $release.tag_name -replace '^v', ''
-              if ($version -match '^\d+\.\d+\.\d+$' -and [version]$version -ge [version]$sourceVersion) { $publish = $false }
+              if ($version -match '^\d+\.\d+\.\d+$' -and ([version]$version -gt [version]$sourceVersion -or ([version]$version -eq [version]$sourceVersion -and -not $rebuild))) { $publish = $false }
             }
             if (-not $publish) { Write-Host 'This version is already published; building without replacing release assets.' }
           }
           $result | Add-Content $env:GITHUB_OUTPUT
           "publish=$($publish.ToString().ToLowerInvariant())" | Add-Content $env:GITHUB_OUTPUT
+          "rebuild=$($rebuild.ToString().ToLowerInvariant())" | Add-Content $env:GITHUB_OUTPUT
       - name: Validate publication prerequisites
         if: steps.resolve.outputs.publish == 'true'
         env:
@@ -91,6 +100,7 @@ jobs:
           CHZZK_CLIENT_ID: ${{ secrets.CHZZK_CLIENT_ID }}
           CHZZK_CLIENT_SECRET: ${{ secrets.CHZZK_CLIENT_SECRET }}
           RELEASE_VERSION: ${{ steps.resolve.outputs.version }}
+          REBUILD_RELEASE: ${{ steps.resolve.outputs.rebuild }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:CHZZK_CLIENT_ID)) { throw 'Set the CHZZK_CLIENT_ID repository Actions secret before publishing.' }
           if ([string]::IsNullOrWhiteSpace($env:CHZZK_CLIENT_SECRET)) { throw 'Set the CHZZK_CLIENT_SECRET repository Actions secret before publishing.' }
@@ -99,7 +109,7 @@ jobs:
           foreach ($release in $releases) {
             if ($release.draft -or $release.prerelease) { continue }
             $version = $release.tag_name -replace '^v', ''
-            if ($version -match '^\d+\.\d+\.\d+$' -and [version]$version -ge [version]$env:RELEASE_VERSION) { throw 'The release version must be newer than every published stable release.' }
+            if ($version -match '^\d+\.\d+\.\d+$' -and ([version]$version -gt [version]$env:RELEASE_VERSION -or ([version]$version -eq [version]$env:RELEASE_VERSION -and $env:REBUILD_RELEASE -ne 'true'))) { throw 'A newer release exists, or same-version replacement was not explicitly requested.' }
           }
       - name: Prepare protected build environment
         shell: cmd
@@ -147,6 +157,7 @@ jobs:
       - name: Install and upgrade the MSI using the actual updater command
         env:
           GH_TOKEN: ${{ github.token }}
+          REBUILD_RELEASE: ${{ steps.resolve.outputs.rebuild }}
         run: |
           .venv/Scripts/python.exe scripts/windows_msi_smoke.py
           if ($LASTEXITCODE -ne 0) { throw 'Actual MSI installation/upgrade verification failed.' }
@@ -202,6 +213,7 @@ jobs:
       RELEASE_TAG: ${{ needs.build.outputs.tag }}
       RELEASE_PRERELEASE: ${{ needs.build.outputs.prerelease }}
       BUILD_SOURCE_SHA: ${{ github.sha }}
+      REBUILD_RELEASE: ${{ needs.build.outputs.rebuild }}
     steps:
       - name: Checkout publication helpers
         uses: actions/checkout@v4

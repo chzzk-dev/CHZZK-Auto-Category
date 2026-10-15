@@ -53,7 +53,7 @@ def write_source(payload, output, version=APP_VERSION, embedded_ui=None, complet
                       Version=version, UpgradeCode=UPGRADE_CODE, Language='1042',
                       Codepage='949', Scope='perMachine', InstallerVersion='500')
     element(package, 'SummaryInformation', Codepage='949', Description='CHZZK Auto Category installer')
-    element(package, 'MajorUpgrade', Schedule='afterInstallInitialize',
+    element(package, 'MajorUpgrade', Schedule='afterInstallInitialize', AllowSameVersionUpgrades='yes',
             DowngradeErrorMessage='더 최신 버전이 설치되어 있습니다. 먼저 해당 버전을 제거해 주세요.')
     element(package, 'MediaTemplate', EmbedCab='yes', CompressionLevel='high')
     element(package, 'Property', Id='MsiLogging', Value='voicewarmupx')

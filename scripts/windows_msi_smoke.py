@@ -28,7 +28,8 @@ def baseline_release():
             continue
         key = tuple(map(int, version.split('.')))
         asset = next((a for a in release['assets'] if a['name'] == f'ChzzkAutoCategory-{version}.msi'), None)
-        if key < current and asset and str(asset.get('digest', '')).startswith('sha256:'):
+        eligible = key < current or (key == current and os.environ.get('REBUILD_RELEASE') == 'true')
+        if eligible and asset and str(asset.get('digest', '')).startswith('sha256:'):
             candidates.append((key, version, release['tag_name'], asset['digest'].split(':', 1)[1]))
     if not candidates:
         raise RuntimeError('No previous stable MSI with a GitHub checksum is available for upgrade verification.')
@@ -45,6 +46,23 @@ def installed_version():
     with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r'Software\CHZZK Dev\AutoCategory',
                         0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY) as key:
         return winreg.QueryValueEx(key, 'Version')[0]
+
+
+def installed_products():
+    import winreg
+    products = set()
+    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+            r'Software\Microsoft\Windows\CurrentVersion\Uninstall',
+            0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY) as uninstall:
+        for index in range(winreg.QueryInfoKey(uninstall)[0]):
+            name = winreg.EnumKey(uninstall, index)
+            with winreg.OpenKey(uninstall, name) as product:
+                try:
+                    if winreg.QueryValueEx(product, 'DisplayName')[0] == 'CHZZK Auto Category':
+                        products.add(name)
+                except FileNotFoundError:
+                    continue
+    return products
 
 
 def malformed_property_result(package, target):
@@ -109,6 +127,9 @@ def main():
             if config.read_bytes() != saved:
                 raise RuntimeError('Installing the baseline changed user settings.')
             print('Fixed command installed the baseline successfully.', flush=True)
+            baseline_products = installed_products()
+            if len(baseline_products) != 1:
+                raise RuntimeError('The baseline must have exactly one registered product.')
 
             _install_msi(current, target, logs / 'upgrade-install.log')
             installed_package = current
@@ -119,6 +140,9 @@ def main():
                     raise RuntimeError('The installed executable does not match the new build: ' + executable)
             if config.read_bytes() != saved:
                 raise RuntimeError('Upgrading changed user settings.')
+            products = installed_products()
+            if len(products) != 1 or products == baseline_products:
+                raise RuntimeError('The old product registration was not replaced exactly once.')
             print('Actual MSI upgrade passed; new executable and existing settings verified.', flush=True)
         finally:
             try:
