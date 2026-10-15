@@ -246,16 +246,25 @@ class ModernWindowMixin:
         # Keep shell/buttons responsive at every logical DPI size.
         for widget in self.findChildren(QPushButton):
             widget.setAccessibleName(widget.text() or widget.toolTip() or '작업')
-        self.log.document().setMaximumBlockCount(1000)
+        self.log.document().setMaximumBlockCount(0)  # The row buffer, not HTML cell blocks, bounds memory.
         for note in old[4].findChildren(QLabel):
             if '200줄' in note.text():
-                note.setText('최근 1,000줄 표시 · 상세 로그는 최대 4MB 순환 저장')
+                note.setText('주요 활동 · 최대 1,000건')
+                note.setToolTip('중간 과정은 세부 과정 표시로 확인합니다. 상세 파일 로그는 최대 4MB 순환 저장합니다.')
         self.log_filter = QComboBox()
         self.log_filter.addItems(['전체', '게임 감지', '카테고리 검색', '자동 매칭', '카테고리 변경',
                                  '치지직 연결', '확장프로그램 통신', '업데이트', '오류'])
         old[4].layout().itemAt(0).layout().insertWidget(0, self.log_filter)
         self.log_filter.currentTextChanged.connect(self.render_logs)
         self.log_entries = deque(maxlen=1000)
+        self.log_detail_entries = deque(maxlen=1000)
+        self.log_sequence = 0
+        self.last_summary_log = None
+        self.log_details = QCheckBox('세부 과정 표시')
+        self.log_details.setAccessibleName('분석·검색·검증 중간 과정 표시')
+        old[4].layout().itemAt(0).layout().insertWidget(1, self.log_details)
+        self.log_details.toggled.connect(self.render_logs)
+        self.render_logs()
         QTimer.singleShot(0, self.ensure_official_api_check)
         self.steam_check_requested = False
         QTimer.singleShot(0, self.ensure_steam_api_check)
@@ -1033,25 +1042,63 @@ class ModernWindowMixin:
             dot.setPixmap(app_icon('success' if good else 'clock', TOKENS['success'] if good else TOKENS['muted']).pixmap(16, 16))
         self.refresh_dashboard()
 
-    def append_log(self, text):
-        from diagnostics import log_kind, redact
+    def append_log(self, text, detail=False):
+        from diagnostics import activity_parts, redact
         text = redact(str(text))
         stamp = datetime.now().strftime('%H:%M:%S')
+        duplicate = not detail and text == getattr(self, 'last_summary_log', None)
+        detail = bool(detail or duplicate)
+        kind, message = activity_parts(text)
         if hasattr(self, 'log_entries'):
-            self.log_entries.append((stamp, log_kind(text), text))
-        super().append_log(text)
-        if hasattr(self, 'log_filter') and self.log_filter.currentIndex() != 0:
+            self.log_sequence += 1
+            target = self.log_detail_entries if detail else self.log_entries
+            target.append((stamp, kind, message, self.log_sequence))
+        if not self.preview and getattr(self, 'bridge', None):
+            self.bridge.add_log(text)
+        if hasattr(self, 'log_details') and (not detail or self.log_details.isChecked()):
             self.render_logs()
-        if hasattr(self, 'recent_activity'):
+        if not detail and hasattr(self, 'recent_activity'):
+            self.last_summary_log = text
             self.recent_activity.append(stamp + ' — ' + text)
-        self.refresh_dashboard()
+            self.refresh_dashboard()
         if not self.preview and self.config.get('detailed_logs', True):
             from diagnostics import record_log
             record_log(text)
 
     def render_logs(self):
+        from html import escape
         selected = self.log_filter.currentText()
-        self.log.setPlainText('\n'.join(f'{t}  [{k}] {s}' for t, k, s in self.log_entries if selected == '전체' or k == selected))
+        entries = list(self.log_entries)
+        if self.log_details.isChecked():
+            entries = sorted([*entries, *self.log_detail_entries], key=lambda entry: entry[3])[-1000:]
+        rows = [(t, k, s) for t, k, s, sequence in entries if selected == '전체' or k == selected]
+        scrollbar = self.log.verticalScrollBar()
+        position = scrollbar.value()
+        at_bottom = position >= scrollbar.maximum() - 4
+        if rows:
+            body = ''.join(
+                '<tr><td width="110" valign="top"><font color="#BEB8AC">'+escape(t)+'</font></td>'
+                '<td width="150" valign="top"><b><font color="'+('#FFB9B4' if k == '오류' else '#E6E2D9')+'">'
+                +escape(k)+'</font></b></td><td valign="top">'+escape(s).replace('\n', '<br>')+'</td></tr>'
+                for t, k, s in rows)
+            content = ('<table width="100%" cellspacing="0" cellpadding="9">'
+                       '<tr><th align="left" width="110">시간</th><th align="left" width="150">유형</th>'
+                       '<th align="left">내용</th></tr>'+body+'</table>')
+        else:
+            content = '<p style="color:#BEB8AC">표시할 주요 활동이 없습니다. 세부 과정은 위 옵션에서 확인할 수 있습니다.</p>'
+        self.log.setHtml('<div style="font-size:14px; color:#F1EFE9">'+content+'</div>')
+        scrollbar.setValue(scrollbar.maximum() if at_bottom else position)
+
+    def clear_logs(self):
+        if not hasattr(self, 'log_entries'):
+            return super().clear_logs()
+        self.log_entries.clear()
+        self.log_detail_entries.clear()
+        self.log_sequence = 0
+        self.last_summary_log = None
+        self.recent_activity.clear()
+        self.render_logs()
+        self.refresh_dashboard()
 
     def on_event(self, event):
         # Existing tests/controller clients may call the method on a minimal host.
@@ -1082,7 +1129,13 @@ class ModernWindowMixin:
             self.runtime_games.pop(event.get('key'), None)
             return
         if kind == 'pipeline_state' and hasattr(self, 'runtime_games'):
-            self.runtime_games[event['data']['key']] = event['data']
+            data = event['data']
+            previous = self.runtime_games.get(data['key'])
+            if data.get('running') and (previous is None or not previous.get('running')):
+                self.append_log('[게임 감지] ' + str(data.get('localized_name') or data.get('game_name') or data.get('process')) + ' 실행 감지')
+            elif previous and previous.get('running') and not data.get('running'):
+                self.append_log('[게임 감지] ' + str(data.get('localized_name') or data.get('game_name') or data.get('process')) + ' 종료')
+            self.runtime_games[data['key']] = data
             self.refresh_table()
             self.refresh_dashboard()
             return

@@ -51,6 +51,7 @@ class Worker(QThread):
         self.snapshot_thread = None
         self.steam = None
         self.last_steam_error = ''
+        self.last_matching_summary = {}
         self.mapper = DiscordAutoMapper(
             discord_cache_file(),
             int(self.config.get('discord_refresh_hours', 24)) * 3600,
@@ -112,7 +113,21 @@ class Worker(QThread):
                       detection_source='Discord + Steam' if game.get('steam_appid') else 'Discord 게임 목록')
         self.pipeline.transition(game, process, stage, **fields)
         if stage != previous:
-            self.emit('log', text=f"[카테고리 검색] {game.get('name') or process} · {process} · {stage}")
+            key = (str(game.get('id') or game.get('name') or process), category_choice_process_key(process))
+            terminal = stage in ('연결 완료', '확인 필요', '오류')
+            signature = (stage, fields.get('category_id', ''), fields.get('category_name', ''), fields.get('error', ''))
+            if terminal and self.last_matching_summary.get(key) != signature:
+                self.last_matching_summary[key] = signature
+                if len(self.last_matching_summary) > 256:
+                    self.last_matching_summary.pop(next(iter(self.last_matching_summary)))
+                title = game.get('steam_name_ko') or game.get('name') or process
+                result = {'연결 완료': '카테고리 연결 완료', '확인 필요': '카테고리 확인 필요',
+                          '오류': '카테고리 검색 오류'}[stage]
+                category = fields.get('category_name')
+                suffix = f' → {category}' if category else ''
+                self.emit('log', text=f'[자동 매칭] {title}{suffix} · {result}')
+            else:
+                self.emit('log', text=f"[카테고리 검색] {game.get('name') or process} · {process} · {stage}", detail=True)
 
     def rule_game(self, rule):
         records = self.mapper.entries.get(rule.process.casefold(), [])
@@ -272,6 +287,8 @@ class Worker(QThread):
         self.emit('detected_games', data=self.processes)
         self.publish_running_games()
         active = {category_choice_process_key(name) for name in self.processes}
+        self.last_matching_summary = {key: value for key, value in self.last_matching_summary.items()
+                                      if key[1] in active}
         self.session_rules = {key: rule for key, rule in self.session_rules.items()
                               if any(category_choice_process_key(p) in active for p in rule.processes)}
         # Lobby/match transitions belong to the same running game session.

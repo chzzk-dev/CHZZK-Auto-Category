@@ -39,6 +39,20 @@ def log_kind(text):
     return '게임 감지'
 
 
+def activity_parts(text):
+    """Separate an explicit type once, keeping the message safe for plain/HTML views."""
+    text = redact(text).strip()
+    match = re.match(r'^\[([^\]\r\n]+)\]\s*(.*)$', text, re.DOTALL)
+    aliases = {'자동 감지': '게임 감지', '게임 목록': '게임 감지',
+               '기본 카테고리': '카테고리 변경', '공식 API 연결': '치지직 연결'}
+    if match:
+        kind = aliases.get(match[1], match[1])
+        if kind in ('게임 감지', '카테고리 검색', '자동 매칭', '카테고리 변경',
+                    '치지직 연결', '확장프로그램 통신', '업데이트', '오류'):
+            return ('오류' if log_kind(text) == '오류' else kind), match[2]
+    return log_kind(text), text
+
+
 def record_log(text):
     global _logger, _listener
     try:
@@ -58,6 +72,7 @@ def record_log(text):
                     _listener = QueueListener(records, handler)
                     _listener.start()
                     _logger = logger
-        _logger.info('[%s] %s', log_kind(text), redact(text))
+        kind, message = activity_parts(text)
+        _logger.info('[%s] %s', kind, message)
     except OSError:
         pass  # Disk errors must not stop automation.

@@ -82,7 +82,7 @@ def button(text, callback, primary=False):
     result = QPushButton(text)
     if primary:
         result.setObjectName('primary')
-    set_button_icon(result, next((name for key, name in (('닫기', 'close'), ('취소', 'close'), ('삭제', 'delete'), ('수정', 'edit'), ('검색', 'search'), ('확인', 'refresh'), ('설정', 'settings'), ('저장', 'success'), ('연결', 'connections'), ('트레이', 'tray'), ('로그', 'logs'), ('위로', 'up'), ('아래로', 'down'), ('업데이트', 'download')) if key in text), 'info'), '#FFFFFF' if primary else '#252525')
+    set_button_icon(result, next((name for key, name in (('닫기', 'close'), ('취소', 'close'), ('삭제', 'delete'), ('지우기', 'delete'), ('수정', 'edit'), ('검색', 'search'), ('확인', 'refresh'), ('설정', 'settings'), ('저장', 'success'), ('연결', 'connections'), ('트레이', 'tray'), ('로그', 'logs'), ('위로', 'up'), ('아래로', 'down'), ('업데이트', 'download')) if key in text), 'info'), '#FFFFFF' if primary else '#252525')
     result.clicked.connect(callback)
     return result
 
@@ -1128,8 +1128,8 @@ class ExistingWindow(QMainWindow):
         note.setObjectName('sectionInfo')
         tools.addWidget(note)
         tools.addStretch(1)
-        tools.addWidget(button('전체 복사', lambda: QApplication.clipboard().setText(self.log.toPlainText())))
-        tools.addWidget(button('화면 지우기', lambda: self.log.clear()))
+        tools.addWidget(button('로그 복사', lambda: QApplication.clipboard().setText(self.log.toPlainText())))
+        tools.addWidget(button('화면 지우기', self.clear_logs))
         layout.addLayout(tools)
         self.log = QTextEdit()
         self.log.setObjectName('activityLog')
@@ -1735,7 +1735,10 @@ class ExistingWindow(QMainWindow):
             return
         self.worker.submit('enable', not self.enabled)
 
-    def append_log(self, text):
+    def clear_logs(self):
+        self.log.clear()
+
+    def append_log(self, text, detail=False):
         self.log.append('')
         self.log.insertPlainText(datetime.now().strftime('%H:%M:%S') + '  ' + text)
         if not self.preview and getattr(self, 'bridge', None):
@@ -1796,19 +1799,22 @@ class ExistingWindow(QMainWindow):
             self.tray.setToolTip('치지직 자동 카테고리\n' + self.last_runtime_status)
             self.refresh_connection_page()
         elif kind == 'checked':
+            was_connected = self.connection_verified
             self.connection_check_pending = False
             self.connection_verified = True
             self.last_connection_check_at = datetime.now().strftime('%H:%M:%S')
             self.account_status.setText(event['text'] + ' · 자동 연결 확인 완료')
             self.account_status_meta.setText(str(self.config.get('channel') or '채널 연결됨'))
-            self.append_log(event['text'])
+            if not was_connected or getattr(self, 'last_logged_connection', None) != event['text']:
+                self.append_log('[치지직 연결] ' + event['text'])
+                self.last_logged_connection = event['text']
             self.refresh_connection_page()
             if self.auto_start_armed and self.config.get('auto_start_change', True) and not self.enabled:
                 self.auto_start_armed = False
                 self.append_log('앱 시작 연결 확인 완료 · 자동 변경을 시작합니다.')
                 self.worker.submit('enable', True)
         elif kind == 'error':
-            self.append_log(event['text'])
+            self.append_log('[오류] ' + event['text'])
             if event.get('operation') == 'check':
                 self.connection_check_pending = False
                 self.connection_verified = False
@@ -1844,7 +1850,9 @@ class ExistingWindow(QMainWindow):
             if new_keys and not self.preview and self.config.get('pending_sound', True):
                 play_pending_alert()
         elif kind in ('applied', 'log'):
-            self.append_log(event['text'])
+            result = '변경 완료' if event.get('changed') else '카테고리 유지'
+            text = ('[카테고리 변경] ' + result + ' · ' + event['text']) if kind == 'applied' else event['text']
+            self.append_log(text, detail=bool(event.get('detail', False)))
             if kind == 'applied':
                 self.last_applied_text = str(event.get('text') or '없음')
             if kind == 'applied' and event.get('changed') and self.config.get('notify', True):

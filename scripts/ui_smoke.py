@@ -32,6 +32,11 @@ def main():
         app.processEvents()
         assert w.pages.count() == w.nav.count() == 6
         assert validate_icons()
+        # Explicit preview fixtures exercise populated log layout; these are not live activity.
+        w.append_log('[게임 감지] Smilemo 실행 감지')
+        w.append_log('[카테고리 검색] Smilemo.exe · 분석 중', detail=True)
+        w.append_log('[자동 매칭] Smilemo → 스마일모 · 카테고리 연결 완료')
+        w.append_log('[카테고리 변경] 변경 완료 · Smilemo.exe → 스마일모')
         checks = []
         for width, height in ((1200, 820), (1360, 860), (1440, 960)):
             w.resize(width, height)
@@ -47,6 +52,11 @@ def main():
                     assert w.dashboard_game_card.height() < 220
                     assert w.dashboard_activity_card.y() > w.dashboard_game_card.geometry().bottom()
                     assert w.dashboard.horizontalScrollBar().maximum() == 0
+                if i == 5:
+                    assert '시간' in w.log.toPlainText() and '스마일모' in w.log.toPlainText()
+                    assert '분석 중' not in w.log.toPlainText()
+                    for control in (w.log_filter, w.log_details):
+                        assert control.parentWidget().rect().contains(control.geometry())
                 assert w.grab().save(str(destination / f'page-{i}-{width}.png'))
                 checks.append({'page': i, 'width': width, 'height': height, 'title': w.page_title.text()})
             w.nav.setCurrentRow(3)
