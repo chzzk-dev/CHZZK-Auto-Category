@@ -76,6 +76,32 @@ LOCALIZED_SEARCH_OVERRIDES = {
     'mimesis.exe': ('미메시스',),
 }
 
+# Discord lists Pratfall (1468444820484784333) without any executables.
+# Steam app_info 4244510 lists Pratfall.exe as the public Windows game binary.
+# Keep confirmed exceptions separate from name-based heuristics and helper binaries.
+VERIFIED_EXECUTABLE_COMPATIBILITY = {
+    'pratfall.exe': {'id': '1468444820484784333', 'name': 'Pratfall',
+                     'aliases': ['프랫폴']},
+}
+
+
+def with_verified_executable_compatibility(entries):
+    result = dict(entries)
+    for executable, verified in VERIFIED_EXECUTABLE_COMPATIBILITY.items():
+        records = list(result.get(executable, []))
+        match = next((i for i, row in enumerate(records)
+                      if row.get('id') == verified['id']
+                      or (not row.get('id') and str(row.get('name', '')).casefold() == verified['name'].casefold())), None)
+        if match is None:
+            records.append(copy.deepcopy(verified))
+        else:
+            record = dict(records[match])
+            record['id'] = verified['id']
+            record['aliases'] = list(dict.fromkeys([*record.get('aliases', []), *verified['aliases']]))[:8]
+            records[match] = record
+        result[executable] = records
+    return result
+
 
 # One LoL signal per scan: match first, otherwise the lobby client.
 LEAGUE_EXECUTABLES = ('league of legends.exe', 'leagueclient.exe')
@@ -578,6 +604,10 @@ def cleanup_auto_mappings(auto_rules, auto_pending, manual_rules=None):
             removed_rules += 1
             continue
 
+        verified = VERIFIED_EXECUTABLE_COMPATIBILITY.get(valid_processes[0].casefold(), {})
+        known_names = [verified.get('name', ''), *verified.get('aliases', [])]
+        compatibility_aliases = (verified.get('aliases', []) if verified and normalize_name(rule.game_name)
+                                 in {normalize_name(n) for n in known_names if n} else [])
         # Remove old auto-generated mappings that are not identity-safe. Explicit
         # category choices are preserved because they represent a user's decision.
         if (rule.game_name and '사용자 카테고리 선택' not in str(rule.match_source or '') and
@@ -588,7 +618,7 @@ def cleanup_auto_mappings(auto_rules, auto_pending, manual_rules=None):
                         'categoryType': rule.category_type,
                     },
                     rule.game_name,
-                    [],
+                    compatibility_aliases,
                     valid_processes[0],
                     rule.game_name,
                 ) < 420):
@@ -721,7 +751,7 @@ class DiscordAutoMapper:
         index = parse_detectable_index(payload)
         if not index:
             raise RuntimeError('Discord 목록에 실행 파일 정보가 없습니다.')
-        self.entries = with_game_client_compatibility(index)
+        self.entries = with_verified_executable_compatibility(with_game_client_compatibility(index))
         self._compatibility_ready = True
         self.clear_search_cache()
         self.updated_at = time.time()
@@ -730,7 +760,7 @@ class DiscordAutoMapper:
     def ensure_index(self):
         self.load_cache()
         if not self._compatibility_ready:
-            self.entries = with_game_client_compatibility(self.entries)
+            self.entries = with_verified_executable_compatibility(with_game_client_compatibility(self.entries))
             self._compatibility_ready = True
         stale = (time.time() - self.updated_at) >= self.refresh_seconds if self.updated_at else True
         if not self.entries:
