@@ -105,7 +105,7 @@ jobs:
         run: |
           if ([string]::IsNullOrWhiteSpace($env:CHZZK_CLIENT_ID)) { throw 'Set the CHZZK_CLIENT_ID repository Actions secret before publishing.' }
           if ([string]::IsNullOrWhiteSpace($env:CHZZK_CLIENT_SECRET)) { throw 'Set the CHZZK_CLIENT_SECRET repository Actions secret before publishing.' }
-          if ($env:STEAM_WEB_API -notmatch '^[0-9a-fA-F]{32}$') { throw 'Set a valid STEAM_WEB_API repository Actions secret before publishing.' }
+          if (-not [string]::IsNullOrWhiteSpace($env:STEAM_WEB_API) -and $env:STEAM_WEB_API -notmatch '^[0-9a-fA-F]{32}$') { throw 'Optional STEAM_WEB_API must be a valid Web API key.' }
           $releases = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0) { throw 'Could not inspect existing releases.' }
           foreach ($release in $releases) {
@@ -150,7 +150,7 @@ jobs:
           if (-not $process.WaitForExit(60000)) { $process.Kill(); throw 'Frozen Qt app did not complete its smoke test.' }
           if ($process.ExitCode -ne 0 -or -not (Test-Path "$output/packaged-checks.json")) { throw 'Frozen Qt app or bundled icon fonts failed.' }
           $checks = Get-Content "$output/packaged-checks.json" -Raw | ConvertFrom-Json
-          if ($env:CHZZK_VERIFY_STEAM_API -eq 'true' -and -not ($checks.steam_builtin_key -and $checks.steam_api_connected -and $checks.steam_localized_lookup)) { throw 'Bundled Steam credentials or actual Steam API verification failed.' }
+          if ($env:CHZZK_VERIFY_STEAM_API -eq 'true' -and -not ($checks.steam_keyless_lookup -and $checks.steam_api_connected -and $checks.steam_localized_lookup)) { throw 'Actual keyless Steam Store verification failed.' }
       - name: Compile protected updater
         shell: cmd
         run: build_updater.bat

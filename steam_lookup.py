@@ -28,6 +28,16 @@ def valid_key(value):
     return bool(re.fullmatch(r'[0-9a-fA-F]{32}', str(value or '').strip()))
 
 
+def valid_app_ids(values):
+    """Normalize Steam IDs without accepting booleans, URLs or numeric coercion."""
+    if not isinstance(values, list):
+        return []
+    return sorted({int(value) for value in values
+                   if type(value) in (str, int)
+                   and re.fullmatch(r'[0-9]{1,10}', str(value))
+                   and 0 < int(value) < 2**32})
+
+
 class SteamResolver:
     def __init__(self, key, cache_file, session=None, cancelled=None):
         self.key = str(key or '').strip()
@@ -124,12 +134,44 @@ class SteamResolver:
         self.last_error = ''
         return True
 
+    def _details(self, appid, name, deadline):
+        payload = self._get(STORE_DETAILS, {'appids': appid, 'l': 'koreana', 'cc': 'KR'}, deadline)
+        app = payload.get(str(appid), {})
+        if not isinstance(app, dict) or not isinstance(app.get('data', {}), dict):
+            raise SteamLookupError('Steam 한국어 이름을 확인할 수 없습니다.')
+        data = app.get('data', {})
+        if (app.get('success') is True and data.get('type') == 'game'
+                and type(data.get('steam_appid')) is int and data['steam_appid'] == appid
+                and isinstance(data.get('name'), str)):
+            record = {'appid': appid, 'name': name,
+                      'localized_name': data['name'].strip(), 'verified_at': time.time()}
+            if self._valid_record(record):
+                return record
+        return None
+
+    def test_store_connection(self):
+        """Check the public Store endpoint independently of optional Web API keys."""
+        try:
+            if not self._details(2827200, 'MIMESIS', time.monotonic() + 15):
+                raise SteamLookupError('Steam 상점 응답을 확인할 수 없습니다.')
+        except SteamLookupError as error:
+            self.last_error = str(error)
+            raise
+        self.last_error = ''
+        self.retry_at = 0
+        return True
+
     def resolve(self, game, process):
-        if not self.configured or self.cancelled():
+        appids = valid_app_ids(game.get('steam_app_ids'))
+        # Multiple Steam editions must never be resolved by picking the first ID.
+        if len(appids) > 1 or (not appids and not self.configured) or self.cancelled():
             return None
         names = [str(game.get('name') or '').strip(), *game.get('aliases', [])]
         targets = {normalized_name(n) for n in names if normalized_name(n)}
-        fingerprint = hashlib.sha256(json.dumps([game.get('id'), sorted(targets), process.casefold()],
+        identity = [game.get('id'), sorted(targets), process.casefold()]
+        if appids:
+            identity.append(appids)
+        fingerprint = hashlib.sha256(json.dumps(identity,
                                                 ensure_ascii=False).encode()).hexdigest()
         previous = self.records.get(fingerprint)
         now = time.time()
@@ -141,29 +183,22 @@ class SteamResolver:
         self.last_error = ''
         deadline = time.monotonic() + 20
         try:
-            payload = self._get(STORE_SEARCH, {'term': names[0], 'l': 'english', 'cc': 'KR'}, deadline)
-            if not isinstance(payload.get('items'), list):
-                raise SteamLookupError('Steam 검색 응답 형식을 확인할 수 없습니다.')
-            matches = {row['id'] for row in payload.get('items', [])[:30]
-                       if isinstance(row, dict) and row.get('type') == 'app'
-                       and type(row.get('id')) is int and 0 < row['id'] < 2**32
-                       and normalized_name(row.get('name')) in targets}
             record = None
-            if len(matches) == 1:
-                appid = matches.pop()
-                official = self._official(appid, deadline)
-                if official and normalized_name(official['name']) in targets:
-                    payload = self._get(STORE_DETAILS, {'appids': appid, 'l': 'koreana', 'cc': 'KR'}, deadline)
-                    app = payload.get(str(appid), {})
-                    if not isinstance(app, dict) or not isinstance(app.get('data', {}), dict):
-                        raise SteamLookupError('Steam 한국어 이름을 확인할 수 없습니다.')
-                    data = app.get('data', {})
-                    if (app.get('success') is True and data.get('type') == 'game'
-                            and data.get('steam_appid') == appid and data.get('name')):
-                        record = {'appid': appid, 'name': str(official['name']),
-                                  'localized_name': str(data['name']), 'verified_at': now}
-                        if not self._valid_record(record):
-                            record = None
+            if appids:
+                record = self._details(appids[0], names[0], deadline)
+            else:
+                payload = self._get(STORE_SEARCH, {'term': names[0], 'l': 'english', 'cc': 'KR'}, deadline)
+                if not isinstance(payload.get('items'), list):
+                    raise SteamLookupError('Steam 검색 응답 형식을 확인할 수 없습니다.')
+                matches = {row['id'] for row in payload.get('items', [])[:30]
+                           if isinstance(row, dict) and row.get('type') == 'app'
+                           and type(row.get('id')) is int and 0 < row['id'] < 2**32
+                           and normalized_name(row.get('name')) in targets}
+                if len(matches) == 1:
+                    appid = matches.pop()
+                    official = self._official(appid, deadline)
+                    if official and normalized_name(official['name']) in targets:
+                        record = self._details(appid, str(official['name']), deadline)
             if self.cancelled():
                 return None
             self.records[fingerprint] = record or {'retry_at': now + 600}

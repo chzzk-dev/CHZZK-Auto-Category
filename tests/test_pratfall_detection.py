@@ -24,7 +24,7 @@ class PratfallDetectionTests(unittest.TestCase):
         self.mapper = DiscordAutoMapper(self.path)
 
     def fresh_old_cache(self):
-        self.path.write_text(json.dumps({'updated_at': time.time(), 'entries': {
+        self.path.write_text(json.dumps({'version': 2, 'updated_at': time.time(), 'entries': {
             'celeste.exe': [{'name': 'Celeste', 'aliases': [], 'id': 'other'}]}}))
 
     def test_discord_game_without_executables_is_reproduced_and_refresh_repaired(self):

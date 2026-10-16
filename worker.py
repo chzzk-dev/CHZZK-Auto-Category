@@ -86,7 +86,7 @@ class Worker(QThread):
         self.mapper.enrich_game = self.enrich_steam_game
 
     def enrich_steam_game(self, game, process):
-        if not self.steam.configured:
+        if not self.config.get('steam_lookup_enabled', True):
             return game
         self.observe_matching(game, process, '분석 중')
         record = self.steam.resolve(game, process)
@@ -692,20 +692,10 @@ class Worker(QThread):
                 self.configure_mapper()
                 if key:
                     pass  # The candidate was checked before replacing the saved key.
-                elif self.steam.configured:
-                    self.steam.test_connection()
                 else:
-                    default_key = get_steam_api_key()
-                    if not valid_key(default_key):
-                        raise SteamLookupError('Steam 연결 정보를 확인할 수 없습니다. 최신 공식 설치본을 설치해 주세요.')
-                    probe = SteamResolver(default_key, discord_cache_file().parent / 'steam_titles.json',
-                                          cancelled=self.cancel.is_set)
-                    try:
-                        probe.test_connection()
-                    finally:
-                        probe.close()
+                    self.steam.test_store_connection()
                 suffix = '한국어 이름 조회 사용' if self.config.get('steam_lookup_enabled', True) else '자동 조회는 꺼져 있습니다'
-                self.emit('steam_status', text='Steam API 연결 확인 완료 · ' + suffix, ok=True)
+                self.emit('steam_status', text='Steam 연결 확인 완료 · ' + suffix, ok=True)
                 self.last_auto_sync = 0
             except (SteamLookupError, OSError, RuntimeError) as error:
                 self.emit('steam_status', text=str(error), ok=False)

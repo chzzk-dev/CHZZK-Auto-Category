@@ -69,16 +69,24 @@ def run_packaged_ui_smoke(destination):
             if os.environ.get('CHZZK_VERIFY_STEAM_API') == 'true':
                 from storage import APP_STEAM_WEB_API_KEY
                 from steam_lookup import SteamResolver, valid_key
-                assert valid_key(APP_STEAM_WEB_API_KEY), 'Bundled Steam key is missing'
-                assert get_steam_api_key() == APP_STEAM_WEB_API_KEY, 'Steam smoke must use the bundled key'
-                probe = SteamResolver(get_steam_api_key(), Path(directory) / 'steam-smoke.json')
+                probe = SteamResolver('', Path(directory) / 'steam-smoke.json')
                 try:
-                    assert probe.test_connection(), 'Steam API authentication failed'
-                    record = probe.resolve({'id': 'ci-mimesis', 'name': 'MIMESIS', 'aliases': []}, 'mimesis.exe')
+                    assert probe.test_store_connection(), 'Steam public Store connection failed'
+                    record = probe.resolve({'id': 'ci-mimesis', 'name': 'MIMESIS', 'aliases': [],
+                                            'steam_app_ids': [2827200]}, 'mimesis.exe')
                     assert record and record['appid'] == 2827200 and record['localized_name'] == '미메시스', 'Steam localized lookup failed'
                 finally:
                     probe.close()
-                checks.update(steam_builtin_key=True, steam_api_connected=True, steam_localized_lookup=True)
+                checks.update(steam_keyless_lookup=True, steam_api_connected=True, steam_localized_lookup=True)
+                if APP_STEAM_WEB_API_KEY:
+                    assert valid_key(APP_STEAM_WEB_API_KEY), 'Bundled Steam fallback key is invalid'
+                    assert get_steam_api_key() == APP_STEAM_WEB_API_KEY, 'Steam smoke must use the bundled key'
+                    probe = SteamResolver(get_steam_api_key(), Path(directory) / 'steam-fallback-smoke.json')
+                    try:
+                        assert probe.test_connection(), 'Steam fallback API authentication failed'
+                    finally:
+                        probe.close()
+                    checks['steam_builtin_key'] = True
             (destination / 'packaged-checks.json').write_text(json.dumps(checks, indent=2), encoding='utf-8')
             w.quitting = True
             w.close()
@@ -272,10 +280,10 @@ class ModernWindowMixin:
 
     def ensure_steam_api_check(self):
         if (self.preview or self.steam_check_requested
-                or not self.config.get('steam_lookup_enabled', True) or not get_steam_api_key()):
+                or not self.config.get('steam_lookup_enabled', True)):
             return
         self.steam_check_requested = True
-        self.steam_status.setText('Steam API 연결을 자동 확인하고 있습니다…')
+        self.steam_status.setText('Steam 연결을 자동 확인하고 있습니다…')
         self.worker.submit('steam_test')
 
     def ensure_official_api_check(self):
@@ -290,13 +298,12 @@ class ModernWindowMixin:
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 8, 0, 0)
         panel, box = card('Steam 한국어 게임 이름')
-        box.addWidget(label('게임 감지 → Steam 게임 확인 → 한국어 이름 조회 → 치지직 검색·검증'))
+        box.addWidget(label('게임 감지 → Discord의 Steam ID 확인 → 한국어 이름 조회 → 치지직 검색·검증'))
         self.steam_enabled = ToggleSwitch('Steam 한국어 매칭')
         self.steam_enabled.setChecked(self.config.get('steam_lookup_enabled', True))
         box.addWidget(setting_row('Steam 한국어 매칭', 'Steam에 없는 게임은 기존 방식으로 매칭합니다.', self.steam_enabled))
         box.addWidget(label('별도의 로그인이나 키 입력 없이 자동으로 연결합니다.'))
-        status = ('자동 설정됨 · 연결 확인 대기' if get_steam_api_key()
-                  else '연결 정보를 확인할 수 없습니다. 최신 공식 설치본을 설치해 주세요.')
+        status = '키 없이 자동 연결 · 연결 확인 대기'
         if not self.steam_enabled.isChecked():
             status = 'Steam 한국어 매칭이 꺼져 있습니다.'
         self.steam_status = label(status, 'inlineStatus')

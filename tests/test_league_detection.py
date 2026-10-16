@@ -29,10 +29,10 @@ class LeagueDetectionTests(unittest.TestCase):
         bad = [{'name': 'Different Game', 'executables': PAYLOAD[0]['executables'][:1]}]
         self.assertNotIn('leagueclientux.exe', parse_detectable_index(bad))
 
-    def test_previous_fresh_cache_drops_clients_without_download(self):
+    def test_current_fresh_cache_drops_clients_without_download(self):
         with tempfile.TemporaryDirectory() as d:
             path = Path(d)/'games.json'
-            path.write_text(json.dumps({'updated_at': time.time(), 'entries': {
+            path.write_text(json.dumps({'version': 2, 'updated_at': time.time(), 'entries': {
                 'leagueclientux.exe': [{'name': 'League of Legends', 'aliases': []}]}}))
             mapper = DiscordAutoMapper(path)
             with patch.object(mapper, 'refresh') as refresh:

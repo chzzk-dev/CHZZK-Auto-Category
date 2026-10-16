@@ -11,8 +11,10 @@ import requests
 from core import Rule
 from normalization import normalized_name, search_name, edition_conflict
 from automation import game_key
+from steam_lookup import valid_app_ids
 
 DISCORD_DETECTABLE_URL = 'https://discord.com/api/v10/applications/detectable'
+INDEX_CACHE_VERSION = 2
 GENERIC_EXECUTABLES = {
     'steam.exe', 'epicgameslauncher.exe', 'epicgameslauncherhelper.exe',
     'battle.net.exe', 'upc.exe', 'uplay.exe', 'origin.exe',
@@ -82,7 +84,7 @@ LOCALIZED_SEARCH_OVERRIDES = {
 # Keep confirmed exceptions separate from name-based heuristics and helper binaries.
 VERIFIED_EXECUTABLE_COMPATIBILITY = {
     'pratfall.exe': {'id': '1468444820484784333', 'name': 'Pratfall',
-                     'aliases': ['프랫폴']},
+                     'aliases': ['프랫폴'], 'steam_app_ids': [4244510]},
 }
 
 
@@ -99,6 +101,8 @@ def with_verified_executable_compatibility(entries):
             record = dict(records[match])
             record['id'] = verified['id']
             record['aliases'] = list(dict.fromkeys([*record.get('aliases', []), *verified['aliases']]))[:8]
+            if 'steam_app_ids' not in record:
+                record['steam_app_ids'] = list(verified.get('steam_app_ids', []))
             records[match] = record
         result[executable] = records
     return result
@@ -283,6 +287,12 @@ def detectable_running_processes(processes, entries):
     return sorted(grouped.values(), key=str.casefold)
 
 
+def discord_steam_ids(app):
+    skus = app.get('third_party_skus')
+    return valid_app_ids([sku.get('id') for sku in skus
+                          if isinstance(sku, dict) and sku.get('distributor') == 'steam']) if isinstance(skus, list) else []
+
+
 def parse_detectable_index(payload):
     index = {}
     for app in payload if isinstance(payload, list) else []:
@@ -293,6 +303,9 @@ def parse_detectable_index(payload):
             continue
         aliases = [str(a).strip() for a in app.get('aliases', []) if isinstance(a, str) and a.strip()]
         entry = {'name': game_name, 'aliases': aliases[:8], 'id': str(app.get('id') or '')}
+        appids = discord_steam_ids(app)
+        if appids:
+            entry['steam_app_ids'] = appids
         for exe in app.get('executables') or []:
             if not isinstance(exe, dict):
                 continue
@@ -695,6 +708,7 @@ class DiscordAutoMapper:
         self._retry_at = 0.0
         self._last_index_error = ''
         self._compatibility_ready = False
+        self._index_version = INDEX_CACHE_VERSION
         self._search_cache = OrderedDict()
         self.observer = None
         self.user_aliases = {}
@@ -735,15 +749,20 @@ class DiscordAutoMapper:
                 if not name:
                     continue
                 aliases = [str(a).strip() for a in item.get('aliases', []) if isinstance(a, str) and a.strip()]
-                records.append({'name': name, 'aliases': aliases[:8], 'id': str(item.get('id') or '')})
+                record = {'name': name, 'aliases': aliases[:8], 'id': str(item.get('id') or '')}
+                appids = valid_app_ids(item.get('steam_app_ids'))
+                if appids:
+                    record['steam_app_ids'] = appids
+                records.append(record)
             if records:
                 parsed[executable.casefold()] = records
         self.entries = parsed
+        self._index_version = data.get('version', 1)
         self.updated_at = float(data.get('updated_at') or 0.0)
 
     def save_cache(self):
         self.cache_file.parent.mkdir(parents=True, exist_ok=True)
-        payload = {'updated_at': self.updated_at, 'entries': self.entries}
+        payload = {'version': self._index_version, 'updated_at': self.updated_at, 'entries': self.entries}
         temp = self.cache_file.with_suffix('.tmp')
         temp.write_text(json.dumps(payload, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
         temp.replace(self.cache_file)
@@ -756,6 +775,14 @@ class DiscordAutoMapper:
         if not index:
             raise RuntimeError('Discord 목록에 실행 파일 정보가 없습니다.')
         self.entries = with_verified_executable_compatibility(with_game_client_compatibility(index))
+        # Compatibility games may have no upstream executable, but still have SKUs.
+        metadata = {str(app.get('id')): discord_steam_ids(app)
+                    for app in payload if isinstance(app, dict) and app.get('id')}
+        for records in self.entries.values():
+            for record in records:
+                if metadata.get(record.get('id')):
+                    record['steam_app_ids'] = metadata[record['id']]
+        self._index_version = INDEX_CACHE_VERSION
         self._compatibility_ready = True
         self.clear_search_cache()
         self.updated_at = time.time()
@@ -767,7 +794,7 @@ class DiscordAutoMapper:
             self.entries = with_verified_executable_compatibility(with_game_client_compatibility(self.entries))
             self._compatibility_ready = True
         stale = (time.time() - self.updated_at) >= self.refresh_seconds if self.updated_at else True
-        if not self.entries:
+        if not self.entries or self._index_version != INDEX_CACHE_VERSION:
             stale = True
         if not stale:
             return {'refreshed': False, 'used_cache': True, 'error': ''}

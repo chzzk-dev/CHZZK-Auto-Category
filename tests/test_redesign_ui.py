@@ -63,9 +63,9 @@ class ModernUiTests(unittest.TestCase):
         w.on_event({'kind': 'steam_status', 'ok': False, 'text': 'Steam 연결을 확인해 주세요.'})
         self.assertIn('연결', w.steam_status.text())
 
-    def test_steam_checks_default_key_once_without_personal_input(self):
+    def test_steam_checks_store_once_without_any_key_or_personal_input(self):
         w = self.window
-        with patch('modern_ui.get_steam_api_key', return_value='a'*32), \
+        with patch('modern_ui.get_steam_api_key', return_value=''), \
                 patch.object(w.worker, 'submit') as submit:
             w.ensure_steam_api_check()
             submit.assert_not_called()  # Preview must stay offline.
