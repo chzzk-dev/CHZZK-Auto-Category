@@ -276,7 +276,7 @@ class TrayPopup(QWidget):
         self.bridge_line = QLabel('로컬 브리지 · 확인 중')
         self.extension_line = QLabel('Chrome 확장 · 연결 대기')
         self.account_line = QLabel('치지직 계정 · 확인 전')
-        self.last_line = QLabel('최근 적용 · 없음')
+        self.last_line = QLabel('현재 게임 · 없음')
         for label in (self.bridge_line, self.extension_line, self.account_line, self.last_line):
             label.setObjectName('trayInfoText')
             label.setWordWrap(True)
@@ -384,11 +384,37 @@ class TrayPopup(QWidget):
         self._show_anim = group
         group.start()
 
+    def game_status(self):
+        runtime = str(getattr(self.host, 'last_runtime_status', '') or '').strip()
+        operation = runtime
+        games = getattr(self.host, 'runtime_games', None)
+        if games is None:
+            return runtime, '최근 적용 · ' + str(getattr(self.host, 'last_applied_text', '없음') or '없음')
+        active = [game for game in games.values() if game.get('running')]
+        representative = self.host.representative_game()
+        if representative:
+            name = str(representative.get('localized_name') or representative.get('game_name')
+                       or representative.get('process') or '확인 중')
+            current = '현재 게임 · ' + name
+            runtime = name + ' · ' + str(representative.get('stage') or '감지됨')
+        elif active:
+            current = '현재 게임 · 대표 게임 선택 필요'
+            runtime = '감지 중 · 여러 게임은 대표 게임을 선택해 주세요'
+        else:
+            current = '현재 게임 · 없음'
+            runtime = '감지 중 · 실행 중인 게임이 없습니다.'
+        if (any(word in operation for word in ('실패', '오류'))
+                or active and operation.startswith(('방송 시작 대기', '카테고리 검증 대기', 'LoL / TFT'))):
+            runtime = operation
+        if not self.host.enabled:
+            runtime = '자동 변경이 일시정지되어 있습니다.'
+        return runtime, current
+
     def refresh(self):
         running = bool(self.host.enabled)
         self.status_title.setText('자동 변경 실행 중' if running else '자동 변경 일시정지')
         self.toggle_button.setText('자동 변경 일시정지' if running else '자동 변경 시작')
-        runtime = str(getattr(self.host, 'last_runtime_status', '') or '').strip()
+        runtime, current = self.game_status()
         self.status_text.setText(runtime or ('게임을 감지하고 있습니다.' if running else '자동 변경을 시작하면 게임을 감지합니다.'))
 
         bridge_ok = not bool(getattr(self.host, 'bridge_start_error', ''))
@@ -397,7 +423,7 @@ class TrayPopup(QWidget):
         self.bridge_line.setText('로컬 브리지 · ' + ('정상' if bridge_ok else '오류'))
         self.extension_line.setText('Chrome 확장 · ' + ('연결됨' if extension_ok else '연결 대기'))
         self.account_line.setText('치지직 계정 · ' + ('연결 확인됨' if account_ok else '확인 전'))
-        self.last_line.setText('최근 적용 · ' + str(getattr(self.host, 'last_applied_text', '없음') or '없음'))
+        self.last_line.setText(current)
 
         release = getattr(self.host, 'pending_update_release', None)
         if isinstance(release, dict):

@@ -466,9 +466,18 @@ class ModernWindowMixin:
         chosen = [g for g in active if g.get('representative')]
         return chosen[0] if len(chosen) == 1 else active[0] if len(active) == 1 else None
 
+    def refresh_tray_status(self):
+        popup = getattr(self, 'tray_popup', None)
+        if popup is not None:
+            runtime, _ = popup.game_status()
+            self.tray.setToolTip('치지직 자동 카테고리\n' + runtime)
+            if popup.isVisible():
+                popup.refresh()
+
     def refresh_dashboard(self):
         if not getattr(self, 'ui_ready', False):
             return
+        self.refresh_tray_status()
         state = '일시정지' if not self.enabled else '실행 중' if self.connection_verified else '연결 대기'
         if not self.enabled and self.auto_start_armed and self.config.get('auto_start_change', True):
             state = '연결 대기'
@@ -1144,6 +1153,8 @@ class ModernWindowMixin:
         if kind == 'pipeline_remove' and hasattr(self, 'runtime_games'):
             self.runtime_games.pop(event.get('key'), None)
             self.game_log_running.pop(event.get('key'), None)
+            self.refresh_table()
+            self.refresh_dashboard()
             return
         if kind == 'pipeline_state' and hasattr(self, 'runtime_games'):
             data = event['data']

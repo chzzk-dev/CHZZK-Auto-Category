@@ -517,7 +517,14 @@ class Worker(QThread):
         rule = choose_representative(rules, self.processes, manual, self.config.get('preferred_process', ''))
         if rule is None:
             self.gate.observe(None, now)
-            self.status('감지 중 · 대표 게임을 기다립니다' if not rules else '감지 중 · 여러 게임은 대표 게임을 선택해 주세요')
+            active = {process.casefold() for process in self.processes}
+            running_rules = {r.key for r in rules if active.intersection(p.casefold() for p in r.processes)}
+            if len(running_rules) > 1:
+                self.status('감지 중 · 여러 게임은 대표 게임을 선택해 주세요')
+            elif any(state.running for state in self.pipeline.states.values()):
+                self.status('감지 중 · 게임 카테고리 연결을 기다립니다')
+            else:
+                self.status('감지 중 · 실행 중인 게임이 없습니다.')
             return
         game = self.rule_game(rule)
         # LoL and TFT share executables. Name-only scans must never infer the mode.
