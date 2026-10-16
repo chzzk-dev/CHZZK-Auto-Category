@@ -77,6 +77,7 @@ LOCALIZED_SEARCH_OVERRIDES = {
     'ride-win64-shipping.exe': ('RV 데어 옛?',),
     'mimesis.exe': ('미메시스',),
     'smilemo.exe': ('스마일모',),
+    'buckshot roulette.exe': ('벅샷 룰렛',),
 }
 
 # Discord lists Pratfall (1468444820484784333) without any executables.

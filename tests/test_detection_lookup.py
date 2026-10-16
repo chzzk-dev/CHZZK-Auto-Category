@@ -66,7 +66,8 @@ class DetectionLookupTests(unittest.TestCase):
 
     def test_localized_overrides_keep_verified_ids_and_survive_rule_cleanup(self):
         for process, name, korean in [('MIMESIS.exe', 'MIMESIS', '미메시스'),
-                                      ('Smilemo.exe', 'SMILEMO', '스마일모')]:
+                                      ('Smilemo.exe', 'SMILEMO', '스마일모'),
+                                      ('Buckshot Roulette.exe', 'Buckshot Roulette', '벅샷 룰렛')]:
             with self.subTest(process=process):
                 self.mapper.clear_search_cache()
                 self.mapper.entries = {process.casefold(): [{'name': name, 'aliases': []}]}
