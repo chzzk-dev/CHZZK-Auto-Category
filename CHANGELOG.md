@@ -5,10 +5,28 @@
 
 ## 미배포
 
+- 아직 기록할 변경 사항이 없습니다.
+
+## [4.12.11](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.11) — 2026-10-16 (KST)
+
+### 변경 사항
+
 - Discord의 Steam App ID를 보존하고 API 키 없이 한국어 게임 이름을 직접 조회합니다.
 - Steam 이름 검색·Web API ID 확인 단계를 생략하여 App ID가 있는 게임의 조회를 줄이고, 기존 캐시는 한 번 갱신합니다.
 - 잘못된 App ID·다중 에디션·DLC는 자동 연결하지 않으며 수동 규칙과 치지직 검증, 기존 키 기반 보조 조회를 유지합니다.
 - Steam 연결 확인과 빌드 검증에 키 없는 상점 조회를 적용하고 STEAM_WEB_API는 선택적인 보조 연결로 유지합니다.
+
+### 커밋
+
+- Use Discord Steam app IDs for keyless Korean title lookup in 4.12.11 ([4453f84](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/4453f84e0e205bcb1ee7c2d6cafb5c6e9157b997))
+
+[전체 변경 비교](https://github.com/chzzk-dev/CHZZK-Auto-Category/compare/v4.12.10...v4.12.11)
+
+### 설치 파일
+
+- `ChzzkAutoCategory-4.12.11.msi`
+- `SHA256SUMS.txt`에서 설치 파일의 SHA-256을 확인할 수 있습니다.
+- 기존 MSI 설치본은 새 MSI로 업그레이드하며 사용자 설정을 유지합니다.
 
 ## [4.12.10](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.10) — 2026-10-15 (KST)
 
