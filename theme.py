@@ -1,105 +1,640 @@
-"""Shared installer-inspired design tokens for Qt screens and dialogs."""
+"""Unicorn Pro-inspired Clean White & Coral Minimal Theme for CHZZK-Auto-Category."""
+
+from __future__ import annotations
+
 from PySide6.QtGui import QColor, QPalette
 
-TOKENS = dict(background='#F3F1EB', card='#323232', sidebar='#252525',
-              accent='#EDEBE4', hover='#DCD9D0', text='#252525', muted='#77756F',
-              border='#FFFFFF', success='#EDEBE4', warning='#D6D2C7', error='#F0BEB8')
-
-STYLE = """
-QWidget { font-family:"Segoe UI", "Malgun Gothic", "Noto Sans CJK KR"; font-size:13px; color:@text; }
-QDialog#subDialog { background:@background; border:3px solid white; border-radius:18px; }
-QMainWindow#appWindow, QWidget#windowRoot { background:transparent; }
-QFrame#shell { background:@background; border:5px solid white; border-radius:22px; }
-QFrame#titleBar { background:@background; border:none; border-top-left-radius:18px; border-top-right-radius:18px; }
-QLabel#titleBarApp { font-weight:700; font-size:12px; }
-QLabel#titleBarVersion, QLabel#pageSub, QLabel#softHint, QLabel#sectionInfo, QLabel#ruleSelectionInfo { color:@muted; }
-QFrame#sidebar { background:@sidebar; border:5px solid white; border-radius:18px; }
-QFrame#brandCard { background:transparent; border:none; }
-QLabel#brandTitle { color:#F5F3EE; font-weight:800; font-size:15px; }
-QLabel#brandSub, QLabel#navSection { color:#BBB9B3; font-size:11px; }
-QListWidget#navList { background:transparent; border:none; outline:0; }
-QListWidget#navList::item { color:#CCCAC4; padding:14px 10px; margin:4px 0; border:2px solid transparent; border-radius:10px; }
-QListWidget#navList::item:selected { color:#252525; background:#EDEBE4; border-color:white; font-weight:700; }
-QListWidget#navList::item:hover:!selected { background:#444444; color:white; border-color:#777777; }
-QFrame#sidebarStatus { background:#393939; border:2px solid #ECEAE3; border-radius:12px; }
-QLabel#sidebarStatusTitle { color:white; font-weight:700; }
-QLabel#sidebarStatusText { color:#C6C3BA; font-size:11px; }
-QFrame#contentCard { background:@background; border:none; }
-QLabel#pageTitle { font-size:26px; font-weight:800; }
-QLabel#sectionTitle { font-size:16px; font-weight:700; }
-QLabel#settingTitle, QLabel#candidateTitle { font-weight:700; }
-QFrame#panelCard, QFrame#settingsCard, QFrame#statusCard, QFrame#statusCardGood, QFrame#candidateCard {
- background:@card; border:5px solid white; border-radius:18px;
+# Color palettes: Default is Unicorn Pro Coral Red ('coral'), with optional Chzzk Mint ('chzzk')
+PALETTES = {
+    'coral': {
+        'background': '#FFFFFF',
+        'card': '#FFFFFF',
+        'sidebar': '#F8F9FB',
+        'accent': '#F0564A',
+        'accent_hover': '#DF4539',
+        'accent_soft': '#FFF0EE',
+        'accent_border': '#F4938B',
+        'hover': '#F3F5F8',
+        'text': '#1E2024',
+        'muted': '#8B909A',
+        'border': '#ECEEF2',
+        'success': '#F0564A',
+        'warning': '#F59E0B',
+        'error': '#E11D48',
+    },
+    'chzzk': {
+        'background': '#FFFFFF',
+        'card': '#FFFFFF',
+        'sidebar': '#F8FAFC',
+        'accent': '#00C77B',
+        'accent_hover': '#00B06D',
+        'accent_soft': '#E8FBF3',
+        'accent_hover_soft': '#D3F7E8',
+        'accent_border': '#6CE0B4',
+        'hover': '#F2F6F5',
+        'text': '#1E2024',
+        'muted': '#8B909A',
+        'border': '#ECEEF2',
+        'success': '#00C77B',
+        'warning': '#F59E0B',
+        'error': '#E11D48',
+    },
 }
-QFrame#panelCard QLabel, QFrame#settingsCard QLabel, QFrame#statusCard QLabel, QFrame#statusCardGood QLabel, QFrame#candidateCard QLabel { color:#F1EFE9; background:transparent; border:none; }
-QFrame#panelCard QLabel#statusCardMeta, QFrame#panelCard QLabel#softHint, QFrame#settingsCard QLabel#softHint, QFrame#statusCard QLabel#statusCardMeta, QFrame#statusCard QLabel#statusCardTitle { color:#C7C4BC; }
-QFrame#panelCard QCheckBox, QFrame#settingsCard QCheckBox { color:#F1EFE9; }
-QLabel#statusCardTitle { font-size:12px; }
-QLabel#statusCardValue { font-size:20px; font-weight:700; }
-QLabel#heroGame { color:#F5F3EE; font-size:30px; font-weight:800; }
-QFrame[dashboardCard="true"] { border-width:4px; border-radius:16px; }
-QFrame[dashboardCard="true"] QLabel#heroGame { font-size:24px; }
-QFrame[dashboardCard="true"] QLabel#dashboardDetailValue { color:#F1EFE9; font-size:14px; font-weight:600; }
-QFrame[dashboardCard="true"] QLabel#dashboardTime { color:#B6B2A8; font-size:11px; }
-QFrame[dashboardCard="true"] QLabel#dashboardActivityText { color:#F1EFE9; font-size:12px; }
-QFrame#dashboardActivityRow { background:transparent; border:none; border-bottom:1px solid #505050; }
-QPushButton#dashboardAction { min-height:20px; padding:5px 10px; font-size:12px; border-radius:8px; }
-QLabel#inlineStatus, QLabel#pendingBadge { color:#F1EFE9; background:#414141; border:2px solid white; border-radius:10px; padding:10px; }
-QLabel#emptyRules, QLabel#emptyPending { background:@card; color:#C7C4BC; padding:24px; border:5px solid white; border-radius:18px; }
-QPushButton, QToolButton { color:#252525; background:#EDEBE4; border:2px solid white; border-radius:10px; padding:8px 12px; min-height:22px; }
-QPushButton:hover, QToolButton:hover { background:#DCD9D0; border-color:#B7B3A8; }
-QPushButton:focus, QToolButton:focus { border:2px solid #8A857B; }
-QPushButton:disabled { color:#8F8D86; background:#DEDBD3; border-color:#E7E4DD; }
-QPushButton#primary { background:#252525; border:2px solid white; color:white; font-weight:700; }
-QPushButton#primary:hover { background:#484848; }
-QPushButton#dangerButton { color:#7D302E; }
-QPushButton#windowButton { min-width:30px; max-width:30px; padding:0; border:none; background:transparent; }
-QLineEdit, QComboBox, QSpinBox { color:#252525; background:#F5F3ED; border:2px solid #D5D1C7; border-radius:10px; padding:9px; min-height:22px; selection-background-color:#CCC8BD; }
-QLineEdit:focus, QComboBox:focus, QSpinBox:focus { border-color:#777168; }
-QComboBox QAbstractItemView, QListWidget { color:#252525; background:#F5F3ED; border:2px solid white; selection-background-color:#D8D4CB; selection-color:#252525; }
-QTextEdit { color:#F1EFE9; background:#323232; border:5px solid white; border-radius:16px; padding:12px; selection-background-color:#666666; }
-QTableView, QTableWidget { color:#F1EFE9; background:#323232; alternate-background-color:#3A3A3A; border:5px solid white; border-radius:18px; gridline-color:#555555; }
-QTableView::item { padding:8px; border-bottom:1px solid #555555; }
-QTableView::item:selected { background:#E4E0D6; color:#252525; }
-QHeaderView::section { color:#F1EFE9; background:#272727; padding:12px; border:none; border-bottom:2px solid white; font-weight:700; }
-QCheckBox { spacing:9px; }
-QFrame#settingRow { background:transparent; border:none; border-bottom:1px solid #505050; }
-QFrame#panelCard QLabel#settingTitle { color:#F4F1E9; font-size:14px; font-weight:600; }
-QFrame#panelCard QLabel#settingDescription { color:#BBB7AD; font-size:12px; }
-QPushButton { min-height:26px; padding:9px 16px; border-radius:11px; font-weight:600; }
-QPushButton:pressed { background:#CEC8BC; }
-QPushButton#primary:pressed { background:#111111; }
-QComboBox { padding:7px 12px; min-height:24px; }
-QComboBox::down-arrow { image:none; width:0; height:0; }
-QComboBox::drop-down { width:28px; border:none; border-left:1px solid #D5D1C7; }
-QScrollBar:vertical { background:#E9E5DB; width:10px; margin:2px; border-radius:5px; }
-QScrollBar::handle:vertical { background:#A8A296; min-height:38px; border-radius:4px; }
-QScrollBar::handle:vertical:hover { background:#787268; }
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }
-QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background:transparent; }
 
-QTabWidget::pane { border:none; }
-QTabBar::tab { color:#77756F; background:transparent; padding:10px 16px; border-bottom:3px solid transparent; }
-QTabBar::tab:selected { color:#252525; border-bottom:3px solid #252525; font-weight:700; }
-QScrollArea, QScrollArea > QWidget > QWidget { background:transparent; border:none; }
-QMenu { color:#252525; background:#F3F1EB; border:3px solid white; } QMenu::item { padding:9px 22px; } QMenu::item:selected { background:#DCD9D0; }
-QToolTip { background:#252525; color:white; padding:7px; border:none; }
-QSizeGrip { background:transparent; width:16px; height:16px; }
+TOKENS: dict[str, str] = dict(PALETTES['coral'])
+
+_STYLE_TEMPLATE = """
+QWidget {
+    font-family: "Pretendard", "Segoe UI", "Malgun Gothic", "Noto Sans CJK KR", sans-serif;
+    font-size: 13px;
+    color: @text;
+}
+
+QMainWindow#appWindow,
+QWidget#windowRoot {
+    background: transparent;
+}
+
+QDialog#subDialog {
+    background: @background;
+    border: 1px solid @border;
+    border-radius: 14px;
+}
+
+QFrame#shell {
+    background: @background;
+    border: 1px solid #DFE2E8;
+    border-radius: 14px;
+}
+
+/* Frameless Title Bar */
+QFrame#titleBar {
+    background: @background;
+    border-top-left-radius: 14px;
+    border-top-right-radius: 14px;
+    border-bottom: 1px solid #F3F4F6;
+}
+
+QLabel#titleBarApp {
+    color: @text;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+QLabel#titleBarVersion,
+QLabel#pageSub,
+QLabel#softHint,
+QLabel#sectionInfo,
+QLabel#ruleSelectionInfo {
+    color: @muted;
+    font-size: 12px;
+}
+
+QPushButton#windowButton,
+QToolButton#windowButton {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: #555962;
+    min-width: 32px;
+    max-width: 32px;
+    min-height: 28px;
+    max-height: 28px;
+    font-size: 13px;
+}
+
+QPushButton#windowButton:hover,
+QToolButton#windowButton:hover {
+    background: @hover;
+    color: @text;
+}
+
+QPushButton#closeButton:hover,
+QToolButton#closeButton:hover {
+    background: @accent;
+    color: #FFFFFF;
+}
+
+/* Far-Left Slim Icon Rail (Unicorn Pro Style) */
+QFrame#iconRail {
+    background: @background;
+    border-right: 1px solid @border;
+    min-width: 62px;
+    max-width: 62px;
+}
+
+QToolButton#railButton {
+    background: transparent;
+    border: none;
+    border-radius: 12px;
+    padding: 8px;
+    min-width: 40px;
+    max-width: 40px;
+    min-height: 40px;
+    max-height: 40px;
+}
+
+QToolButton#railButton:hover {
+    background: @hover;
+}
+
+QToolButton#railButton[active="true"] {
+    background: @accent_soft;
+}
+
+QToolButton#railBottomButton {
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    padding: 6px;
+    min-width: 32px;
+    max-width: 32px;
+    min-height: 32px;
+    max-height: 32px;
+    color: @muted;
+}
+
+QToolButton#railBottomButton:hover {
+    background: @hover;
+    color: @text;
+}
+
+/* Secondary Navigation Sidebar (Unicorn Settings Style) */
+QFrame#sidebar {
+    background: @sidebar;
+    border-right: 1px solid @border;
+    border-top-left-radius: 0px;
+    border-bottom-left-radius: 0px;
+}
+
+QFrame#brandCard {
+    background: transparent;
+    border: none;
+    padding: 4px 0px;
+}
+
+QLabel#brandTitle {
+    color: @text;
+    font-size: 18px;
+    font-weight: 800;
+}
+
+QLabel#brandSub {
+    color: @muted;
+    font-size: 11px;
+}
+
+QLabel#navSection {
+    color: @muted;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 12px;
+}
+
+QListWidget#navList {
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 4px 0px;
+}
+
+QListWidget#navList::item {
+    color: #4E525B;
+    background: transparent;
+    padding: 12px 16px;
+    margin: 2px 0px;
+    border-left: 3px solid transparent;
+    border-radius: 0px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+QListWidget#navList::item:selected {
+    color: @accent;
+    background: transparent;
+    border-left: 3px solid @accent;
+    font-weight: 700;
+}
+
+QListWidget#navList::item:hover:!selected {
+    color: @text;
+    background: #F1F3F6;
+}
+
+QFrame#sidebarStatus {
+    background: #FFFFFF;
+    border: 1px solid @border;
+    border-radius: 12px;
+    padding: 10px;
+}
+
+/* Main Content Area & Headers */
+QLabel#pageTitle {
+    color: @text;
+    font-size: 20px;
+    font-weight: 800;
+}
+
+QLabel#sectionTitle {
+    color: @text;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+/* Clean White Cards & Metric Cards */
+QFrame#panelCard,
+QFrame#settingsCard,
+QFrame#statusCard,
+QFrame#statusCardGood,
+QFrame#candidateCard,
+QFrame#metricCard,
+QFrame#ruleSelectionCard {
+    background: @card;
+    border: 1px solid @border;
+    border-radius: 14px;
+}
+
+QFrame[dashboardCard="true"] {
+    background: #FFFFFF;
+    border: 1px solid #EFEFEF;
+    border-radius: 14px;
+}
+
+QFrame#dashboardHero {
+    background: #FFFFFF;
+    border: none;
+}
+
+QLabel#heroGame {
+    color: @text;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+QLabel#heroStatus {
+    color: @text;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+QLabel#heroMeta {
+    color: @muted;
+    font-size: 13px;
+}
+
+QLabel#metricLabel {
+    color: @muted;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+QLabel#metricValue {
+    color: @text;
+    font-size: 20px;
+    font-weight: 800;
+}
+
+/* Flat Divider Setting Rows (Screenshot 2 Style) */
+QFrame#settingRow {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid #F0F2F5;
+    padding: 14px 2px;
+}
+
+QLabel#settingTitle {
+    color: @text;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+QLabel#settingDesc {
+    color: @muted;
+    font-size: 12px;
+}
+
+QFrame#dashboardActivityRow {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid #F1F3F5;
+    padding: 8px 0px;
+}
+
+/* Status Pill Badge (Screenshot 3 Style: "상태 : 사용가능") */
+QLabel#statusPillBadge,
+QLabel#inlineStatus,
+QLabel#pendingBadge {
+    background: #FFFFFF;
+    color: @accent;
+    border: 1px solid @accent_border;
+    border-radius: 14px;
+    padding: 5px 16px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QLabel#emptyRules,
+QLabel#emptyPending {
+    background: #FAFBFC;
+    color: @muted;
+    border: 1px dashed @border;
+    border-radius: 12px;
+    padding: 24px;
+}
+
+/* Underline Tabs (Screenshot 2 Style) */
+QTabWidget::pane {
+    border: none;
+    background: @background;
+    top: -1px;
+}
+
+QTabBar {
+    background: transparent;
+    border-bottom: 1px solid @border;
+}
+
+QTabBar::tab {
+    background: transparent;
+    color: #5A5F6A;
+    padding: 10px 4px;
+    margin-right: 28px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+QTabBar::tab:selected {
+    color: @accent;
+    border-bottom: 2px solid @accent;
+    font-weight: 700;
+}
+
+QTabBar::tab:hover:!selected {
+    color: @text;
+}
+
+/* Buttons */
+QPushButton,
+QToolButton {
+    background: #FFFFFF;
+    color: @text;
+    border: 1px solid #DCDFE6;
+    border-radius: 6px;
+    padding: 7px 14px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QPushButton:hover,
+QToolButton:hover {
+    background: @hover;
+    border-color: #C8CDD6;
+}
+
+QPushButton:disabled,
+QToolButton:disabled {
+    background: #F5F6F8;
+    color: #B4B8C2;
+    border-color: #EAECEF;
+}
+
+/* Solid Coral Primary Button (Screenshot 1 Popup "앱 업데이트 하기") */
+QPushButton#primary {
+    background: @accent;
+    color: #FFFFFF;
+    border: 1px solid @accent;
+    border-radius: 6px;
+    padding: 8px 18px;
+    font-weight: 700;
+}
+
+QPushButton#primary:hover {
+    background: @accent_hover;
+    border-color: @accent_hover;
+}
+
+/* Outlined Coral Action Button (Screenshot 1 "여기를 눌러 앱 업데이트 하기") */
+QPushButton#outlineAccentButton,
+QPushButton#dashboardAction {
+    background: #FFFFFF;
+    color: @accent;
+    border: 1px solid @accent_border;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QPushButton#outlineAccentButton:hover,
+QPushButton#dashboardAction:hover {
+    background: @accent_soft;
+    border-color: @accent;
+}
+
+/* Minimal Text-Only Accent Link Button (Screenshot 2 & 3 "앱별로 설정하기", "기기등록 해제") */
+QPushButton#textAccentButton {
+    background: transparent;
+    color: @accent;
+    border: none;
+    padding: 6px 2px;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: left;
+}
+
+QPushButton#textAccentButton:hover {
+    color: @accent_hover;
+    text-decoration: underline;
+}
+
+/* Bottom Sync Button (Screenshot 3 "이용권 동기화") */
+QPushButton#syncGhostButton {
+    background: transparent;
+    color: #4E525B;
+    border: none;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+QPushButton#syncGhostButton:hover {
+    color: @text;
+    background: @hover;
+    border-radius: 8px;
+}
+
+QPushButton#dangerButton,
+QPushButton#danger {
+    background: #FFFFFF;
+    color: @error;
+    border: 1px solid #FECDD3;
+}
+
+QPushButton#dangerButton:hover,
+QPushButton#danger:hover {
+    background: #FFF1F2;
+    border-color: @error;
+}
+
+/* Inputs, ComboBoxes, Tables & Scrollbars */
+QLineEdit,
+QComboBox,
+QSpinBox,
+QTextEdit {
+    background: #FFFFFF;
+    color: @text;
+    border: 1px solid #DCDFE6;
+    border-radius: 6px;
+    padding: 7px 10px;
+}
+
+QLineEdit:focus,
+QComboBox:focus,
+QSpinBox:focus,
+QTextEdit:focus {
+    border: 1px solid @accent;
+}
+
+QTableView {
+    background: #FFFFFF;
+    alternate-background-color: #FAFBFC;
+    color: @text;
+    border: 1px solid @border;
+    border-radius: 10px;
+    gridline-color: #F1F3F5;
+    selection-background-color: @accent_soft;
+    selection-color: @text;
+}
+
+QHeaderView::section {
+    background: #F8F9FB;
+    color: #5A5F6A;
+    border: none;
+    border-bottom: 1px solid @border;
+    padding: 10px 8px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+QScrollArea {
+    background: transparent;
+    border: none;
+}
+
+QScrollBar:vertical {
+    background: transparent;
+    width: 8px;
+    margin: 2px;
+}
+
+QScrollBar::handle:vertical {
+    background: #D5D9E0;
+    border-radius: 4px;
+    min-height: 24px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #B4BAC4;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+QProgressBar {
+    background: #F1F3F6;
+    border: none;
+    border-radius: 4px;
+    height: 8px;
+    text-align: center;
+    color: transparent;
+}
+
+QProgressBar::chunk {
+    background: @accent;
+    border-radius: 4px;
+}
+
+QMenu {
+    background: #FFFFFF;
+    border: 1px solid @border;
+    border-radius: 8px;
+    padding: 6px;
+}
+
+QMenu::item {
+    padding: 7px 14px;
+    border-radius: 5px;
+}
+
+QMenu::item:selected {
+    background: @accent_soft;
+    color: @accent;
+}
+
+QToolTip {
+    background: #1E2024;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 10px;
+}
 """
-for _key, _value in TOKENS.items():
-    STYLE = STYLE.replace('@' + _key, _value)
 
 
-def apply_theme(app):
-    app.setStyle('Fusion')
+def _compile_style(tokens: dict[str, str]) -> str:
+    style = _STYLE_TEMPLATE
+    # Sort keys by length descending so @accent_border is replaced before @accent
+    for key in sorted(tokens.keys(), key=len, reverse=True):
+        style = style.replace(f'@{key}', tokens[key])
+    return style
+
+
+STYLE: str = _compile_style(TOKENS)
+
+
+def set_accent_palette(palette_name: str = 'coral', app=None) -> str:
+    """Switch between 'coral' (Unicorn Pro Red) and 'chzzk' (Chzzk Mint Green) palettes."""
+    global STYLE
+    chosen = PALETTES.get(palette_name, PALETTES['coral'])
+    TOKENS.clear()
+    TOKENS.update(chosen)
+    STYLE = _compile_style(TOKENS)
+    if app is not None:
+        apply_theme(app)
+    return STYLE
+
+
+def apply_theme(app) -> None:
+    """Apply the clean white Unicorn Pro theme and QPalette to QApplication or widget."""
+    if hasattr(app, 'setStyle'):
+        app.setStyle('Fusion')
+
     palette = QPalette()
-    for role, color in dict(Window=TOKENS['background'], WindowText=TOKENS['text'],
-                            Base='#F5F3ED', AlternateBase='#E5E1D7', Text=TOKENS['text'],
-                            Button='#EDEBE4', ButtonText=TOKENS['text'],
-                            Highlight='#D8D4CB', HighlightedText=TOKENS['text'],
-                            ToolTipBase=TOKENS['text'], ToolTipText='#FFFFFF').items():
-        palette.setColor(getattr(QPalette.ColorRole, role), QColor(color))
-    for role in ('Text', 'WindowText', 'ButtonText'):
-        palette.setColor(QPalette.ColorGroup.Disabled, getattr(QPalette.ColorRole, role), QColor('#9AAAB2'))
-    app.setPalette(palette)
-    app.setStyleSheet(STYLE)
+    palette.setColor(QPalette.ColorRole.Window, QColor(TOKENS['background']))
+    palette.setColor(QPalette.ColorRole.WindowText, QColor(TOKENS['text']))
+    palette.setColor(QPalette.ColorRole.Base, QColor('#FFFFFF'))
+    palette.setColor(QPalette.ColorRole.AlternateBase, QColor('#F8F9FB'))
+    palette.setColor(QPalette.ColorRole.Text, QColor(TOKENS['text']))
+    palette.setColor(QPalette.ColorRole.Button, QColor('#FFFFFF'))
+    palette.setColor(QPalette.ColorRole.ButtonText, QColor(TOKENS['text']))
+    palette.setColor(QPalette.ColorRole.Highlight, QColor(TOKENS['accent_soft']))
+    palette.setColor(QPalette.ColorRole.HighlightedText, QColor(TOKENS['accent']))
+    palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(TOKENS['text']))
+    palette.setColor(QPalette.ColorRole.ToolTipText, QColor('#FFFFFF'))
+
+    disabled_color = QColor('#B4B8C2')
+    for role_name in ('Text', 'WindowText', 'ButtonText'):
+        role = getattr(QPalette.ColorRole, role_name)
+        palette.setColor(QPalette.ColorGroup.Disabled, role, disabled_color)
+
+    if hasattr(app, 'setPalette'):
+        app.setPalette(palette)
+    if hasattr(app, 'setStyleSheet'):
+        app.setStyleSheet(STYLE)
+
+
+apply_light_theme = apply_theme
