@@ -5,7 +5,27 @@
 
 ## 미배포
 
+- 아직 기록할 변경 사항이 없습니다.
+
+## [4.12.13](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.13) — 2026-10-23 (KST)
+
+### 변경 사항
+
 - 게임 목록이 비어 있어도 표 머리글과 높이를 유지하고, 검색 결과 없음 안내·조건 초기화·선택 정보 및 버튼 상태를 일관되게 표시합니다.
+
+### 커밋
+
+- \[cancel obsolete builds\] Release 4.12.13 with stable empty game-list layout ([b5cf471](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/b5cf4719beb99af805d5e72d8dafe76ef9751232))
+- Merge pull request #4 from chzzk-dev/fix/game-list-empty-state ([1b55058](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/1b5505843294709c2bc0ed9ced519d7bd9b936e1))
+- Keep the game table layout stable when empty or filtered ([b8c5648](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/b8c56483e7fcb04325a9d12aa839007b4745aa8f))
+
+[전체 변경 비교](https://github.com/chzzk-dev/CHZZK-Auto-Category/compare/v4.12.12...v4.12.13)
+
+### 설치 파일
+
+- `ChzzkAutoCategory-4.12.13.msi`
+- `SHA256SUMS.txt`에서 설치 파일의 SHA-256을 확인할 수 있습니다.
+- 기존 MSI 설치본은 새 MSI로 업그레이드하며 사용자 설정을 유지합니다.
 
 ## [4.12.12](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.12) — 2026-10-23 (KST)
 
