@@ -334,13 +334,34 @@ QLabel#pendingBadge {
     font-weight: 600;
 }
 
-QLabel#emptyRules,
 QLabel#emptyPending {
     background: #FAFBFC;
     color: @muted;
     border: 1px dashed @border;
     border-radius: 12px;
     padding: 24px;
+}
+
+QFrame#gameEmptyState {
+    background: transparent;
+    border: none;
+}
+
+QLabel#gameEmptyIcon {
+    background: #F7F8FA;
+    border: none;
+    border-radius: 24px;
+}
+
+QLabel#gameEmptyTitle {
+    color: @text;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+QLabel#gameEmptyDescription {
+    color: @muted;
+    font-size: 12px;
 }
 
 /* Underline Tabs (Screenshot 2 Style) */
@@ -518,6 +539,23 @@ QHeaderView::section {
     padding: 10px 8px;
     font-size: 12px;
     font-weight: 700;
+}
+
+QTableView#rulesTable {
+    border-radius: 4px;
+    outline: 0;
+}
+
+QTableView#rulesTable::item {
+    padding: 0px 10px;
+    border: none;
+    border-bottom: 1px solid #F2F3F5;
+}
+
+QTableView#rulesTable::item:selected {
+    background: @accent_soft;
+    color: @text;
+    border: none;
 }
 
 QScrollArea {

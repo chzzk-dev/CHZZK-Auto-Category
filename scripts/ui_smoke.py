@@ -14,6 +14,7 @@ from PySide6.QtCore import QByteArray, QBuffer, QIODevice
 from main import Window, apply_light_theme
 from storage import normalize_config
 from app_icons import validate_icons
+from core import Rule
 
 
 def save_preview(widget, path):
@@ -66,6 +67,46 @@ def render_update_windows(app, destination):
     app.processEvents()
 
 
+def render_game_list_states(window, app, destination, width):
+    window.nav.setCurrentRow(1)
+    window.game_tabs.setCurrentIndex(0)
+    original = (window.rules, window.auto_rules, window.auto_pending, window.runtime_games)
+    try:
+        window.rules, window.auto_rules, window.auto_pending, window.runtime_games = [], [], [], {}
+        window.refresh_table()
+        app.processEvents()
+        bounds = (window.table.geometry(), window.rule_selection_info.geometry())
+        columns = [window.table.columnWidth(i) for i in range(window.game_model.columnCount())]
+        assert window.table.isVisible() and window.table.horizontalHeader().isVisible()
+        assert window.rule_empty.isVisible()
+        assert window.table.viewport().rect().contains(window.rule_empty.geometry())
+        assert save_preview(window.game_tabs.widget(0), destination / f'games-empty-{width}.png')
+        window.rules = [Rule('Minecraft.exe', 'minecraft', '마인크래프트', game_name='Minecraft')]
+        window.auto_rules = [Rule('VALORANT-Win64-Shipping.exe', 'valorant', '발로란트', game_name='VALORANT')]
+        window.runtime_games = {'valorant': {'process': 'VALORANT-Win64-Shipping.exe', 'running': True, 'stage': '감지됨'}}
+        window.refresh_table()
+        window.select_rule_location('auto', 0)
+        app.processEvents()
+        assert not window.rule_empty.isVisible() and window.game_model.rowCount() == 2
+        assert bounds == (window.table.geometry(), window.rule_selection_info.geometry())
+        assert columns == [window.table.columnWidth(i) for i in range(window.game_model.columnCount())]
+        assert save_preview(window.game_tabs.widget(0), destination / f'games-populated-{width}.png')
+        window.rule_filter.setText('검색 결과가 없는 게임')
+        app.processEvents()
+        assert window.rule_empty.isVisible() and 'VALORANT' not in window.rule_selection_info.text()
+        assert bounds == (window.table.geometry(), window.rule_selection_info.geometry())
+        assert columns == [window.table.columnWidth(i) for i in range(window.game_model.columnCount())]
+        assert save_preview(window.game_tabs.widget(0), destination / f'games-filtered-{width}.png')
+        window.rule_empty_action.click()
+        app.processEvents()
+        assert window.game_model.rowCount() == 2 and not window.rule_empty.isVisible()
+    finally:
+        window.rules, window.auto_rules, window.auto_pending, window.runtime_games = original
+        window.rule_filter.clear()
+        window.game_filter.setCurrentIndex(0)
+        window.refresh_table()
+
+
 def main():
     app = QApplication([])
     font = os.environ.get('CHZZK_UI_TEST_FONT')
@@ -110,6 +151,7 @@ def main():
                         assert control.parentWidget().rect().contains(control.geometry())
                 assert save_preview(w, destination / f'page-{i}-{width}.png')
                 checks.append({'page': i, 'width': width, 'height': height, 'title': w.page_title.text()})
+            render_game_list_states(w, app, destination, width)
             w.nav.setCurrentRow(3)
             w.connection_tabs.setCurrentIndex(2)
             app.processEvents()
@@ -131,6 +173,7 @@ def main():
     render_update_windows(app, destination)
     print(f'Qt scale {os.environ.get("QT_SCALE_FACTOR", "1")}: 18 page/size renders, dashboard alignment, icons, popup and restore passed')
     print('Update prompt, download, completion and error previews passed without starting the installer')
+    print('Empty, populated and filtered game lists retained their table/header/footer geometry at all three sizes')
 
 
 if __name__ == '__main__':
