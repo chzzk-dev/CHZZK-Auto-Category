@@ -1,4 +1,6 @@
 import os
+import ctypes
+from ctypes import wintypes
 from pathlib import Path
 import json
 import subprocess
@@ -73,6 +75,7 @@ import io
 import json
 from pathlib import Path
 import sys
+import time
 from unittest.mock import patch
 root, folder, parent_pid = sys.argv[1:]
 sys.path.insert(0, root)
@@ -105,6 +108,11 @@ with patch.object(updater_app, '_wait_parent_exit', side_effect=wait), \\
      patch.object(updater_app, 'CONFIG_DIR', folder / 'config'), \\
      patch.object(updater_app, '_install_msi', side_effect=install_msi):
     (folder / 'ready').write_text('ready')
+    deadline = time.monotonic() + 10
+    while not (folder / 'proceed').exists():
+        if time.monotonic() >= deadline:
+            raise RuntimeError('Test controller did not acknowledge the child process')
+        time.sleep(0.02)
     worker.run()
 (folder / 'result.tmp').write_text(json.dumps({'failed': failed, 'completed': completed,
                                               'installed': installed}), encoding='utf-8')
@@ -115,7 +123,16 @@ with patch.object(updater_app, '_wait_parent_exit', side_effect=wait), \\
 @unittest.skipUnless(os.name == 'nt', 'Requires actual Windows process termination')
 class WindowsUpdaterLifecycleTests(unittest.TestCase):
     def test_updater_finishes_after_normal_and_forced_parent_exit(self):
-        import psutil
+        kernel32 = ctypes.windll.kernel32
+        kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+        kernel32.WaitForSingleObject.restype = wintypes.DWORD
+        kernel32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
+        kernel32.TerminateProcess.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel32.CloseHandle.restype = wintypes.BOOL
+        wait_timeout = 258
         for mode in ('normal', 'forced'):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
                 folder = Path(temporary)
@@ -130,7 +147,10 @@ class WindowsUpdaterLifecycleTests(unittest.TestCase):
                     while not (folder / 'helper.pid').exists() and time.monotonic() < deadline:
                         time.sleep(0.02)
                     self.assertTrue((folder / 'helper.pid').exists(), 'Fixture did not launch the updater')
-                    helper = psutil.Process(int((folder / 'helper.pid').read_text()))
+                    helper_pid = int((folder / 'helper.pid').read_text())
+                    helper = kernel32.OpenProcess(0x00100001, False, helper_pid)
+                    self.assertTrue(helper, 'Could not open the fixture updater process')
+                    (folder / 'proceed').write_text('continue')
                     host.wait(timeout=15)
                     if mode == 'normal':
                         self.assertEqual(host.returncode, 0)
@@ -138,7 +158,8 @@ class WindowsUpdaterLifecycleTests(unittest.TestCase):
                         self.assertNotEqual(host.returncode, 0)
                     result_path = folder / 'result.json'
                     deadline = time.monotonic() + 10
-                    while not result_path.exists() and helper.is_running() and time.monotonic() < deadline:
+                    while (not result_path.exists() and time.monotonic() < deadline
+                           and kernel32.WaitForSingleObject(helper, 0) == wait_timeout):
                         time.sleep(0.02)
                     diagnostic = (folder / 'helper.log').read_text(encoding='utf-8')
                     self.assertTrue(result_path.exists(), 'Updater exited with its parent. ' + diagnostic)
@@ -146,17 +167,16 @@ class WindowsUpdaterLifecycleTests(unittest.TestCase):
                     self.assertEqual(result['failed'], [], diagnostic)
                     self.assertEqual(result['installed'], [True])
                     self.assertEqual(result['completed'], [str(folder / 'app' / 'ChzzkAutoCategory.exe')])
-                    helper.wait(timeout=5)
+                    self.assertEqual(kernel32.WaitForSingleObject(helper, 5000), 0)
                 finally:
                     if host.poll() is None:
                         host.kill()
                         host.wait(timeout=5)
-                    if helper is not None:
-                        try:
-                            helper.kill()
-                            helper.wait(timeout=5)
-                        except psutil.NoSuchProcess:
-                            pass
+                    if helper:
+                        if kernel32.WaitForSingleObject(helper, 0) == wait_timeout:
+                            kernel32.TerminateProcess(helper, 1)
+                            kernel32.WaitForSingleObject(helper, 5000)
+                        kernel32.CloseHandle(helper)
 
 
 if __name__ == '__main__':
