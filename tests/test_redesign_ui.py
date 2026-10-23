@@ -5,6 +5,8 @@ from pathlib import Path
 from unittest.mock import patch
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from PySide6.QtWidgets import QApplication, QTableView
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
 from main import Window, apply_light_theme
 from core import Rule
 from storage import normalize_config, load_config
@@ -130,6 +132,113 @@ class ModernUiTests(unittest.TestCase):
         w.select_rule_location('manual', 2500)
         w.refresh_table()
         self.assertEqual(w.selected_rule_location()['index'], 2500)
+
+    def test_empty_and_populated_lists_keep_the_same_table_and_footer_bounds(self):
+        w = self.window
+        w.nav.setCurrentRow(1)
+        w.show()
+        for width, height in ((1200, 820), (1360, 860), (1440, 960)):
+            w.resize(width, height)
+            self.app.processEvents()
+            self.assertEqual(w.game_model.rowCount(), 0)
+            self.assertTrue(w.table.isVisible())
+            self.assertTrue(w.table.horizontalHeader().isVisible())
+            self.assertTrue(w.rule_empty.isVisible())
+            self.assertTrue(w.table.viewport().rect().contains(w.rule_empty.geometry()))
+            bounds = (w.table.geometry(), w.rule_selection_info.geometry(), w.rule_edit_button.geometry())
+            columns = [w.table.columnWidth(i) for i in range(w.game_model.columnCount())]
+            w.rules = [Rule('LongGame.exe', 'game', '게임 카테고리', game_name='아주 긴 게임 이름 ' * 30)]
+            w.refresh_table()
+            w.select_rule_location('manual', 0)
+            self.app.processEvents()
+            self.assertFalse(w.rule_empty.isVisible())
+            self.assertEqual(bounds, (w.table.geometry(), w.rule_selection_info.geometry(), w.rule_edit_button.geometry()))
+            self.assertEqual(columns, [w.table.columnWidth(i) for i in range(w.game_model.columnCount())])
+            with patch.object(w, 'persist', return_value=True):
+                w.remove_rule()
+            self.app.processEvents()
+            self.assertEqual(bounds, (w.table.geometry(), w.rule_selection_info.geometry(), w.rule_edit_button.geometry()))
+            self.assertEqual(columns, [w.table.columnWidth(i) for i in range(w.game_model.columnCount())])
+            self.assertTrue(w.rule_empty.isVisible())
+            self.assertNotIn('LongGame.exe', w.rule_selection_info.text())
+            self.assertFalse(w.rule_delete_button.isEnabled())
+        w.hide()
+
+    def test_filtered_empty_state_resets_conditions_and_restores_clickable_rows(self):
+        w = self.window
+        w.rules = [Rule('Game.exe', 'game', '게임', game_name='테스트 게임')]
+        w.refresh_table()
+        w.nav.setCurrentRow(1)
+        w.show()
+        self.app.processEvents()
+        bounds = w.table.geometry()
+        w.game_filter.setCurrentText('자동 연결')
+        w.rule_filter.setText('없는 게임')
+        self.app.processEvents()
+        self.assertTrue(w.rule_empty.isVisible())
+        self.assertEqual(w.rule_empty_title.text(), '검색 결과가 없습니다')
+        self.assertNotIn('등록된 게임이 없습니다', w.rule_empty_title.text())
+        self.assertEqual(w.table.geometry(), bounds)
+        w.rule_empty_action.click()
+        self.app.processEvents()
+        self.assertEqual(w.game_filter.currentText(), '전체')
+        self.assertEqual(w.rule_filter.text(), '')
+        self.assertEqual(w.game_model.rowCount(), 1)
+        self.assertFalse(w.rule_empty.isVisible())
+        point = w.table.visualRect(w.game_model.index(0, 0)).center()
+        QTest.mouseClick(w.table.viewport(), Qt.MouseButton.LeftButton, pos=point)
+        self.assertEqual(w.selected_rule_location(), {'kind': 'manual', 'index': 0})
+        w.hide()
+
+    def test_empty_list_add_action_opens_the_existing_rule_editor(self):
+        w = self.window
+        with patch.object(w, 'edit_rule') as edit:
+            w.rule_empty_action.click()
+            edit.assert_called_once_with(new=True)
+        self.assertEqual(w.rules, [])
+        self.assertEqual(w.auto_rules, [])
+
+    def test_selection_summary_refreshes_after_replacement_and_after_search_hides_it(self):
+        w = self.window
+        w.rules = [Rule('Selected.exe', 'old', '이전 카테고리', game_name='선택 게임')]
+        w.refresh_table()
+        w.select_rule_location('manual', 0)
+        self.assertIn('이전 카테고리', w.rule_selection_info.text())
+        w.rules = [Rule('Selected.exe', 'new', '변경된 카테고리', game_name='선택 게임')]
+        w.refresh_table()
+        self.assertIn('변경된 카테고리', w.rule_selection_info.text())
+        self.assertEqual(w.selected_rule_location(), {'kind': 'manual', 'index': 0})
+        w.rule_filter.setText('missing')
+        self.assertIsNone(w.selected_game())
+        self.assertNotIn('Selected.exe', w.rule_selection_info.text())
+        self.assertEqual(w.rule_selection_info.toolTip(), '')
+        self.assertFalse(w.rule_edit_button.isEnabled())
+        self.assertFalse(w.rule_details_button.isEnabled())
+
+    def test_rule_toolbar_only_enables_actions_supported_by_the_selection(self):
+        w = self.window
+        self.assertFalse(w.rule_delete_button.isEnabled())
+        w.rules = [Rule('First.exe', 'first', '첫 게임'), Rule('Last.exe', 'last', '마지막 게임')]
+        w.auto_rules = [Rule('Auto.exe', 'auto', '자동 게임')]
+        w.auto_pending = [{'process': 'Unknown.exe', 'games': ['Unknown']}]
+        w.refresh_table()
+        w.select_rule_location('manual', 0)
+        self.assertTrue(w.rule_edit_button.isEnabled())
+        self.assertTrue(w.rule_delete_button.isEnabled())
+        self.assertFalse(w.rule_move_up_button.isEnabled())
+        self.assertTrue(w.rule_move_down_button.isEnabled())
+        w.select_rule_location('manual', 1)
+        self.assertTrue(w.rule_move_up_button.isEnabled())
+        self.assertFalse(w.rule_move_down_button.isEnabled())
+        w.select_rule_location('auto', 0)
+        self.assertTrue(w.rule_edit_button.isEnabled())
+        self.assertTrue(w.rule_delete_button.isEnabled())
+        self.assertFalse(w.rule_move_up_button.isEnabled())
+        self.assertFalse(w.rule_move_down_button.isEnabled())
+        w.select_rule_location('pending', 0)
+        self.assertTrue(w.rule_edit_button.isEnabled())
+        self.assertTrue(w.rule_details_button.isEnabled())
+        self.assertFalse(w.rule_delete_button.isEnabled())
 
     def test_pending_items_are_a_game_filter_not_an_apply_queue(self):
         w = self.window

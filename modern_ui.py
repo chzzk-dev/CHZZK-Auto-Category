@@ -9,7 +9,7 @@ from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QSize, QTimer
 from PySide6.QtWidgets import (QWidget, QFrame, QLabel, QVBoxLayout, QHBoxLayout,
     QGridLayout, QScrollArea, QTabWidget, QListWidgetItem, QComboBox, QLineEdit,
     QCheckBox, QTableView, QHeaderView, QAbstractItemView, QPushButton, QDialog,
-    QFormLayout, QTextEdit, QApplication, QToolButton)
+    QFormLayout, QTextEdit, QApplication, QToolButton, QLayout, QSizePolicy)
 from app_icons import app_icon, set_button_icon
 from core import Rule
 from normalization import normalized_name, alias_conflicts
@@ -620,30 +620,69 @@ class ModernWindowMixin:
         self.table.setShowGrid(False)
         self.table.setWordWrap(False)
         self.table.verticalHeader().hide()
-        self.table.verticalHeader().setDefaultSectionSize(50)
+        self.table.verticalHeader().setDefaultSectionSize(48)
         h = self.table.horizontalHeader()
         for i in (0, 1, 2):
             h.setSectionResizeMode(i, QHeaderView.ResizeMode.Stretch)
-        for i in (3, 4, 5):
-            h.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+        for i, width in ((3, 80), (4, 104), (5, 84)):
+            h.setSectionResizeMode(i, QHeaderView.ResizeMode.Fixed)
+            h.resizeSection(i, width)
         self.table.selectionModel().selectionChanged.connect(lambda *_: self.update_rule_selection_info())
         self.table.clicked.connect(lambda index: self.show_game_details() if index.column() == 5 else None)
         self.table.doubleClicked.connect(lambda *_: self.show_game_details())
         layout.addWidget(self.table, 1)
-        self.rule_empty = label('등록된 게임이 없습니다. 게임을 실행하거나 게임 추가를 선택해 주세요.', 'emptyRules')
-        self.rule_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.rule_empty)
+        empty_layout = QVBoxLayout(self.table.viewport())
+        empty_layout.setContentsMargins(24, 24, 24, 24)
+        empty_layout.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
+        empty_layout.addStretch()
+        self.rule_empty = QFrame()
+        self.rule_empty.setObjectName('gameEmptyState')
+        self.rule_empty.setMinimumWidth(320)
+        self.rule_empty.setMaximumWidth(420)
+        empty_box = QVBoxLayout(self.rule_empty)
+        empty_box.setContentsMargins(12, 12, 12, 12)
+        empty_box.setSpacing(10)
+        empty_icon = QLabel()
+        empty_icon.setObjectName('gameEmptyIcon')
+        empty_icon.setFixedSize(48, 48)
+        empty_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_icon.setPixmap(app_icon('games', '#A6ABB3').pixmap(26, 26))
+        empty_box.addWidget(empty_icon, 0, Qt.AlignmentFlag.AlignHCenter)
+        self.rule_empty_title = label('등록된 게임이 없습니다', 'gameEmptyTitle')
+        self.rule_empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_box.addWidget(self.rule_empty_title)
+        self.rule_empty_description = label('게임을 실행해 자동 감지하거나\n게임 추가로 직접 등록해 주세요.', 'gameEmptyDescription')
+        self.rule_empty_description.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_box.addWidget(self.rule_empty_description)
+        self.rule_empty_action = action('게임 추가', self.handle_empty_rules_action, 'add', True)
+        empty_box.addWidget(self.rule_empty_action, 0, Qt.AlignmentFlag.AlignHCenter)
+        empty_layout.addWidget(self.rule_empty, 0, Qt.AlignmentFlag.AlignHCenter)
+        empty_layout.addStretch()
         self.rule_selection_info = label('게임을 선택하면 연결과 상세 정보를 관리할 수 있습니다.')
+        self.rule_selection_info.setWordWrap(False)
+        self.rule_selection_info.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.rule_selection_info)
         row = QHBoxLayout()
-        row.addWidget(action('수정', self.edit_rule, 'edit'))
-        row.addWidget(action('간편 설정', self.show_game_details, 'details'))
-        row.addWidget(action('삭제', self.remove_rule, 'delete'))
+        self.rule_edit_button = action('수정', self.edit_rule, 'edit')
+        self.rule_details_button = action('간편 설정', self.show_game_details, 'details')
+        self.rule_delete_button = action('삭제', self.remove_rule, 'delete')
+        for button in (self.rule_edit_button, self.rule_details_button, self.rule_delete_button):
+            row.addWidget(button)
         row.addStretch()
-        row.addWidget(action('위로', lambda: self.move_rule(-1), 'up'))
-        row.addWidget(action('아래로', lambda: self.move_rule(1), 'down'))
+        self.rule_move_up_button = action('위로', lambda: self.move_rule(-1), 'up')
+        self.rule_move_down_button = action('아래로', lambda: self.move_rule(1), 'down')
+        row.addWidget(self.rule_move_up_button)
+        row.addWidget(self.rule_move_down_button)
         layout.addLayout(row)
+        self.update_rule_selection_info()
         self.pages.addWidget(page)
+
+    def handle_empty_rules_action(self):
+        if self.rule_filter.text().strip() or self.game_filter.currentIndex() != 0:
+            self.rule_filter.clear()
+            self.game_filter.setCurrentIndex(0)
+        else:
+            self.edit_rule(new=True)
 
     def refresh_table(self):
         if not hasattr(self, 'game_model'):
@@ -681,8 +720,14 @@ class ModernWindowMixin:
         if selected:
             self.select_rule_location(selected['kind'], selected['index'])
         self.rule_empty.setVisible(not rows)
-        self.table.setVisible(bool(rows))
+        filtered = bool(q or f != '전체')
+        self.rule_empty_title.setText('검색 결과가 없습니다' if q else '조건에 맞는 게임이 없습니다' if filtered else '등록된 게임이 없습니다')
+        self.rule_empty_description.setText('검색어나 필터를 초기화하면\n전체 게임을 다시 볼 수 있습니다.' if filtered
+                                            else '게임을 실행해 자동 감지하거나\n게임 추가로 직접 등록해 주세요.')
+        self.rule_empty_action.setText('조건 초기화' if filtered else '게임 추가')
+        set_button_icon(self.rule_empty_action, 'refresh' if filtered else 'add', '#FFFFFF')
         self.rule_stats_text.setText(f'연결 {len(self.rules) + len(self.auto_rules)}개 · 미확정 {len(self.auto_pending)}개')
+        self.update_rule_selection_info()
         if hasattr(self, 'pending_table'):
             self.refresh_pending_page()
 
@@ -707,8 +752,16 @@ class ModernWindowMixin:
         if not hasattr(self, 'rule_selection_info'):
             return
         row = self.selected_game()
-        self.rule_selection_info.setText(f"{row['game']} · {row['process']} → {row['category']} · {row['state']}" if row
-                                         else '게임을 선택하면 연결과 상세 정보를 관리할 수 있습니다.')
+        text = (f"{row['game']} · {row['process']} → {row['category']} · {row['state']}" if row
+                else '게임을 선택하면 연결과 상세 정보를 관리할 수 있습니다.')
+        self.rule_selection_info.setText(text)
+        self.rule_selection_info.setToolTip(text if row else '')
+        self.rule_edit_button.setEnabled(bool(row and row['kind'] in ('manual', 'auto', 'pending')))
+        self.rule_details_button.setEnabled(bool(row))
+        self.rule_delete_button.setEnabled(bool(row and row['kind'] in ('manual', 'auto')))
+        manual = row and row['kind'] == 'manual'
+        self.rule_move_up_button.setEnabled(bool(manual and row['index'] > 0))
+        self.rule_move_down_button.setEnabled(bool(manual and row['index'] < len(self.rules) - 1))
 
     def confirm_league_selection(self, rule):
         if self.league_session_token and rule and any(p.casefold() in ('leagueclient.exe', 'league of legends.exe') for p in rule.processes):
