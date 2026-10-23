@@ -1395,10 +1395,20 @@ class ExistingWindow(QMainWindow):
             except Exception:
                 pass
         self.update_window = AutoUpdateWindow(release, self)
+        self.update_window.deferred.connect(self.defer_update)
         self.update_window.destroyed.connect(lambda *_: setattr(self, 'update_window', None))
         self.update_window.show()
         self.update_window.raise_()
         self.update_window.activateWindow()
+
+    def defer_update(self, release):
+        if self.quitting:
+            return
+        self.pending_update_release = release
+        if getattr(self, 'update_action', None):
+            self.update_action.setText(f"업데이트 {release.get('version') or '?'} 설치")
+            self.update_action.setVisible(True)
+        self.refresh_update_page()
 
     def persist(self):
         candidate = copy.deepcopy(self.config)

@@ -235,6 +235,14 @@ class ModernUiTests(unittest.TestCase):
         checker.return_value.start.assert_called_once()
         self.assertGreater(w.config['update_last_checked_at'], 0)
 
+    def test_deferring_update_preserves_the_tray_install_action(self):
+        w = self.window
+        release = {'version': '4.12.12', 'release_tag': 'v4.12.12'}
+        w.defer_update(release)
+        self.assertEqual(w.pending_update_release, release)
+        self.assertTrue(w.update_action.isVisible())
+        self.assertIn('4.12.12', w.update_action.text())
+
     def test_authorization_cookie_and_json_secrets_are_redacted(self):
         from diagnostics import redact
         for value in ('Authorization: Bearer private', 'Cookie: session=private',

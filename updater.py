@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QProgressBar,
     QPushButton,
+    QTextBrowser,
     QVBoxLayout,
     QWidget,
 )
@@ -31,19 +32,8 @@ from version import (
 )
 
 
-from theme import STYLE as SHARED_STYLE, TOKENS
+from theme import UPDATE_STYLE
 from app_icons import set_button_icon
-UPDATE_STYLE = SHARED_STYLE + f"""
-QMainWindow {{ background: {TOKENS['background']}; }}
-QFrame#shell {{ background: {TOKENS['background']}; border:1px solid {TOKENS['border']}; border-radius:20px; }}
-QLabel#logo {{ background:{TOKENS['accent']}; color:{TOKENS['text']}; border-radius:16px; font-size:20px; font-weight:800; }}
-QLabel#title {{ font-size:17px; font-weight:700; }}
-QLabel#status {{ font-size:22px; font-weight:800; }}
-QLabel#detail, QLabel#sub {{ color:{TOKENS['muted']}; }}
-QLabel#version {{ color:{TOKENS['success']}; background:#323232; border-radius:10px; padding:6px 10px; }}
-QProgressBar {{ min-height:15px; max-height:15px; background:#D4D0C5; border:none; border-radius:7px; color:transparent; }}
-QProgressBar::chunk {{ background:{TOKENS['accent']}; border-radius:7px; }}
-"""
 
 
 def _version_tuple(value):
@@ -118,6 +108,8 @@ def fetch_latest_release(allow_prerelease=False):
         'package_url': str(package.get('browser_download_url') or ''),
         'package_size': int(package.get('size') or 0),
         'checksum_url': str(checksums.get('browser_download_url') or '') if checksums else '',
+        'release_notes': str(payload.get('body') or '').strip(),
+        'published_at': str(payload.get('published_at') or ''),
     }
 
 
@@ -184,6 +176,8 @@ class UpdateCheckWorker(QThread):
 
 
 class AutoUpdateWindow(QMainWindow):
+    deferred = Signal(object)
+
     def __init__(self, release, parent=None):
         super().__init__(parent)
         self.release = dict(release or {})
@@ -191,81 +185,70 @@ class AutoUpdateWindow(QMainWindow):
         self.dot_count = 0
         self.status_base = '업데이트 프로그램 준비 중'
         self.started = False
-        self.setWindowTitle('CHZZK Auto Category Update')
-        self.setFixedSize(610, 330)
+        self.setWindowTitle('업데이트')
+        self.resize(600, 460)
+        self.setMinimumSize(520, 400)
         self.setStyleSheet(UPDATE_STYLE)
 
         root = QWidget()
         outer = QVBoxLayout(root)
-        outer.setContentsMargins(18, 18, 18, 18)
-
+        outer.setContentsMargins(0, 0, 0, 0)
         shell = QFrame()
-        shell.setObjectName('shell')
+        shell.setObjectName('updateShell')
         layout = QVBoxLayout(shell)
-        layout.setContentsMargins(30, 26, 30, 24)
-        layout.setSpacing(15)
-
-        header = QHBoxLayout()
-        logo = QLabel('C')
-        logo.setObjectName('logo')
-        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo.setFixedSize(38, 38)
-        header.addWidget(logo)
-
-        brand = QVBoxLayout()
-        title = QLabel('CHZZK Auto Category')
-        title.setObjectName('title')
-        sub = QLabel('External Update Handoff')
-        sub.setObjectName('sub')
-        brand.addWidget(title)
-        brand.addWidget(sub)
-        header.addLayout(brand)
-        header.addStretch()
+        layout.setContentsMargins(24, 20, 24, 18)
+        layout.setSpacing(12)
+        heading = QLabel('업데이트')
+        heading.setObjectName('updateHeading')
+        layout.addWidget(heading)
+        divider = QFrame()
+        divider.setObjectName('updateDivider')
+        layout.addWidget(divider)
 
         version = str(self.release.get('version') or '?')
-        version_label = QLabel(f'{APP_VERSION}  →  {version}')
-        version_label.setObjectName('version')
-        header.addWidget(version_label)
-        layout.addLayout(header)
-
-        layout.addSpacing(8)
-        self.status_label = QLabel(self.status_base)
-        self.status_label.setObjectName('status')
+        self.status_label = QLabel(f'{version} 버전이 출시되었습니다.')
+        self.status_label.setObjectName('updateVersion')
+        self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
+        self.version_label = QLabel(f'현재 버전 {APP_VERSION}  →  새 버전 {version}')
+        self.version_label.setObjectName('updateCaption')
+        layout.addWidget(self.version_label)
 
-        self.detail_label = QLabel(
-            '별도 업데이트 프로그램을 임시 폴더에서 실행합니다.\n'
-            '현재 앱이 종료된 뒤 Windows Installer로 새 MSI를 설치합니다.'
-        )
-        self.detail_label.setObjectName('detail')
-        self.detail_label.setWordWrap(True)
-        layout.addWidget(self.detail_label)
+        self.notes = QTextBrowser()
+        self.notes.setObjectName('releaseNotes')
+        self.notes.setReadOnly(True)
+        self.notes.setOpenLinks(False)
+        self.notes.setMarkdown(self.release.get('release_notes') or '이번 버전의 변경 내용이 제공되지 않았습니다.')
+        layout.addWidget(self.notes, 1)
 
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
-        self.progress.setValue(10)
+        self.progress.setValue(0)
         self.progress.setTextVisible(False)
+        self.progress.hide()
         layout.addWidget(self.progress)
-
-        layout.addStretch()
-        self.close_button = QPushButton('취소')
+        self.detail_label = QLabel('업데이트하는 동안 프로그램이 종료됩니다.')
+        self.detail_label.setObjectName('updateNotice')
+        self.detail_label.setWordWrap(True)
+        layout.addWidget(self.detail_label)
+        footer = QHBoxLayout()
+        footer.addStretch()
+        self.close_button = QPushButton('나중에')
         self.close_button.clicked.connect(self.close)
-        row = QHBoxLayout()
-        row.addStretch()
-        row.addWidget(self.close_button)
-        layout.addLayout(row)
-
+        footer.addWidget(self.close_button)
+        self.update_button = QPushButton('앱 업데이트하기')
+        self.update_button.setObjectName('primary')
+        self.update_button.clicked.connect(self.start_updater)
+        footer.addWidget(self.update_button)
+        layout.addLayout(footer)
         outer.addWidget(shell)
         self.setCentralWidget(root)
-
         self.anim = QTimer(self)
         self.anim.setInterval(330)
         self.anim.timeout.connect(self.animate_status)
-        self.anim.start()
-        QTimer.singleShot(450, self.start_updater)
 
     def animate_status(self):
-        if not self.started:
+        if self.started:
             self.dot_count = (self.dot_count + 1) % 4
             self.status_label.setText(self.status_base + ('.' * self.dot_count))
 
@@ -274,7 +257,12 @@ class AutoUpdateWindow(QMainWindow):
             return
         self.started = True
         self.close_button.setEnabled(False)
-        set_button_icon(self.close_button, 'close')
+        self.update_button.setEnabled(False)
+        self.update_button.setText('준비 중…')
+        self.status_label.setText(self.status_base)
+        self.progress.show()
+        self.progress.setValue(10)
+        self.anim.start()
         try:
             launch_external_updater(self.release)
         except Exception as exc:
@@ -282,15 +270,27 @@ class AutoUpdateWindow(QMainWindow):
             self.anim.stop()
             self.status_label.setText('업데이트 프로그램 실행 실패')
             self.detail_label.setText(str(exc))
+            self.detail_label.setObjectName('updateError')
+            self.detail_label.style().unpolish(self.detail_label)
+            self.detail_label.style().polish(self.detail_label)
             self.progress.setValue(0)
             self.close_button.setText('닫기')
             self.close_button.setEnabled(True)
+            self.update_button.setText('다시 시도')
+            self.update_button.setEnabled(True)
             return
-
         self.progress.setValue(100)
-        self.status_label.setText('업데이트 프로그램으로 전환 중')
-        self.detail_label.setText('업데이트 창이 열립니다. 현재 앱은 파일 잠금을 풀기 위해 종료됩니다.')
+        self.status_base = '업데이트 프로그램으로 전환 중'
+        self.status_label.setText(self.status_base)
+        self.detail_label.setText('업데이트 창이 열립니다. 설치가 끝나면 프로그램을 다시 실행합니다.')
         QTimer.singleShot(600, self._quit_owner)
+
+    def closeEvent(self, event):
+        if self.started:
+            event.ignore()
+            return
+        self.deferred.emit(dict(self.release))
+        super().closeEvent(event)
 
     def _quit_owner(self):
         if self.owner is not None and hasattr(self.owner, 'quit_app'):
