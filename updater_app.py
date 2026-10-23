@@ -166,7 +166,8 @@ def _force_stop_pid(pid):
     if os.name != 'nt' or not pid or pid <= 0:
         return
     subprocess.run(
-        ['taskkill', '/PID', str(int(pid)), '/T', '/F'],
+        # The updater is a child of this PID; /T would terminate it too.
+        ['taskkill', '/PID', str(int(pid)), '/F'],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),

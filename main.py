@@ -1944,8 +1944,8 @@ class ExistingWindow(QMainWindow):
         self.toggle_button.setEnabled(False)
         self.status_label.setText('종료 중 · 진행 중인 요청을 정리하고 있습니다')
         if self.worker.isRunning():
-            self.worker.submit('stop')
             self.worker.finished.connect(self.finish_quit)
+            self.worker.submit('stop')
         else:
             self.finish_quit()
 
