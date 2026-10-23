@@ -658,9 +658,11 @@ class ModernWindowMixin:
         empty_box.addWidget(self.rule_empty_action, 0, Qt.AlignmentFlag.AlignHCenter)
         empty_layout.addWidget(self.rule_empty, 0, Qt.AlignmentFlag.AlignHCenter)
         empty_layout.addStretch()
-        self.rule_selection_info = label('게임을 선택하면 연결과 상세 정보를 관리할 수 있습니다.')
+        self.rule_selection_info = label('게임을 선택하면 연결과 상세 정보를 관리할 수 있습니다.', 'ruleSelectionInfo')
         self.rule_selection_info.setWordWrap(False)
         self.rule_selection_info.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        # Mixed Korean/Latin fallback glyphs must not change the table height.
+        self.rule_selection_info.setFixedHeight(24)
         layout.addWidget(self.rule_selection_info)
         row = QHBoxLayout()
         self.rule_edit_button = action('수정', self.edit_rule, 'edit')
