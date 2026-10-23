@@ -300,48 +300,48 @@ class TrayPopup(QWidget):
         self.setStyleSheet(r'''
             QWidget#trayPopupWindow { background: transparent; }
             QFrame#trayPanel {
-                background: #F3F1EB;
-                border: 1px solid #D7D3C9;
+                background: #FFFFFF;
+                border: 1px solid #ECEEF2;
                 border-radius: 20px;
             }
             QLabel#trayAppIcon { background: transparent; border: none; }
             QLabel#trayTitle { color: #252525; font-size: 14px; font-weight: 800; }
-            QLabel#trayCaption { color: #77756F; font-size: 11px; }
+            QLabel#trayCaption { color: #8B909A; font-size: 11px; }
             QFrame#trayStatusCard, QFrame#trayInfoCard {
                 background: #FFFFFF;
-                border: 1px solid #D7D3C9;
+                border: 1px solid #ECEEF2;
                 border-radius: 14px;
             }
             QLabel#trayStatusTitle { color: #252525; font-size: 13px; font-weight: 750; }
-            QLabel#trayInfoText { color: #77756F; font-size: 11px; }
-            QLabel#traySection { color: #77756F; font-size: 10px; font-weight: 700; padding: 2px 2px 0 2px; }
-            QFrame#trayDivider { background: #D7D3C9; border: none; }
+            QLabel#trayInfoText { color: #8B909A; font-size: 11px; }
+            QLabel#traySection { color: #8B909A; font-size: 10px; font-weight: 700; padding: 2px 2px 0 2px; }
+            QFrame#trayDivider { background: #ECEEF2; border: none; }
             QPushButton#trayButton {
                 text-align: left;
                 background: #FFFFFF;
                 color: #252525;
-                border: 1px solid #D7D3C9;
+                border: 1px solid #ECEEF2;
                 border-radius: 13px;
                 min-height: 22px;
                 padding: 10px 13px;
                 font-weight: 650;
             }
-            QPushButton#trayButton:hover { background: #E3DFD5; border-color: #BDB7AB; }
+            QPushButton#trayButton:hover { background: #F3F5F8; border-color: #DFE2E8; }
             QPushButton#trayPrimary {
                 text-align: left;
-                background: #252525;
+                background: #F0564A;
                 color: #FFFFFF;
-                border: 1px solid #252525;
+                border: 1px solid #F0564A;
                 border-radius: 13px;
                 min-height: 22px;
                 padding: 10px 13px;
                 font-weight: 800;
             }
-            QPushButton#trayPrimary:hover { background: #484848; border-color: #484848; }
+            QPushButton#trayPrimary:hover { background: #DF4539; border-color: #DF4539; }
             QPushButton#trayDanger {
                 text-align: left;
                 background: #FFFFFF;
-                color: #B94A59;
+                color: #E11D48;
                 border: 1px solid #EBCBD1;
                 border-radius: 13px;
                 min-height: 22px;
@@ -805,7 +805,7 @@ class ExistingWindow(QMainWindow):
 
         body = QWidget()
         body_layout = QHBoxLayout(body)
-        body_layout.setContentsMargins(8, 0, 8, 8)
+        body_layout.setContentsMargins(0, 0, 0, 0)
         body_layout.setSpacing(6)
         shell_layout.addWidget(body, 1)
 
@@ -882,7 +882,7 @@ class ExistingWindow(QMainWindow):
         content = QFrame()
         content.setObjectName('contentCard')
         content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(24, 24, 20, 18)
+        content_layout.setContentsMargins(32, 24, 32, 24)
         content_layout.setSpacing(15)
 
         header = QHBoxLayout()
@@ -1027,7 +1027,7 @@ class ExistingWindow(QMainWindow):
         title_label = QLabel(title)
         title_label.setObjectName('statusCardTitle')
         dot = QLabel()
-        dot.setPixmap(app_icon('info', '#77756F').pixmap(16, 16))
+        dot.setPixmap(app_icon('info', '#8B909A').pixmap(16, 16))
         dot.setObjectName('statusDotOff')
         top.addWidget(title_label)
         top.addStretch(1)

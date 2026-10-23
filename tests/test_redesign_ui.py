@@ -42,7 +42,17 @@ class ModernUiTests(unittest.TestCase):
         self.assertEqual([id(w.pages.widget(i)) for i in range(6)], identities)
         self.assertEqual(w.minimumWidth(), 1200)
         self.assertEqual(w.minimumHeight(), 820)
-        self.assertEqual(TOKENS['background'], '#F3F1EB')
+        self.assertEqual(TOKENS['background'], '#FFFFFF')
+
+    def test_icon_rail_navigates_existing_pages_without_recreating_them(self):
+        w = self.window
+        identities = [id(w.pages.widget(i)) for i in range(6)]
+        for target, (button, icon_name) in w.rail_buttons.items():
+            button.click()
+            self.app.processEvents()
+            self.assertEqual(w.pages.currentIndex(), target)
+            self.assertTrue(button.property('active'))
+        self.assertEqual([id(w.pages.widget(i)) for i in range(6)], identities)
 
     def test_all_offline_icons_render(self):
         self.assertTrue(validate_icons())

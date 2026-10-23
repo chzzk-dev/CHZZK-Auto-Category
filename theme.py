@@ -45,8 +45,9 @@ TOKENS: dict[str, str] = dict(PALETTES['coral'])
 
 _STYLE_TEMPLATE = """
 QWidget {
-    font-family: "Pretendard", "Segoe UI", "Malgun Gothic", "Noto Sans CJK KR", sans-serif;
+    font-family: "Pretendard", "Malgun Gothic", "Noto Sans KR", "Noto Sans CJK KR", "Segoe UI", sans-serif;
     font-size: 13px;
+    font-weight: 400;
     color: @text;
 }
 
@@ -345,6 +346,7 @@ QLabel#emptyPending {
 /* Underline Tabs (Screenshot 2 Style) */
 QTabWidget::pane {
     border: none;
+    border-top: 1px solid @border;
     background: @background;
     top: -1px;
 }
@@ -582,6 +584,51 @@ QToolTip {
     border-radius: 6px;
     padding: 6px 10px;
 }
+
+QFrame#contentCard { background: @background; border: none; }
+QFrame#shell { border-radius: 8px; }
+QFrame#iconRail { min-width: 54px; max-width: 54px; }
+QToolButton#railButton, QToolButton#railBrand {
+    min-width: 36px; max-width: 36px; min-height: 36px; max-height: 36px;
+    padding: 0; border: none; border-radius: 8px; background: transparent;
+}
+QToolButton#railButton[active="true"] { background: @accent_soft; }
+QToolButton#railButton:hover, QToolButton#railBrand:hover { background: @hover; }
+QFrame#brandCard { padding: 0; }
+QLabel#brandTitle { font-size: 16px; font-weight: 600; padding-left: 8px; }
+QLabel#navSection { font-weight: 400; font-size: 10px; padding: 10px 18px; }
+QListWidget#navList::item {
+    padding: 10px 18px; margin: 3px 0; border-left: 2px solid transparent;
+    font-weight: 400; font-size: 12px;
+}
+QListWidget#navList::item:selected {
+    border-left: 2px solid @accent; color: @accent; background: transparent;
+}
+QFrame#sidebarStatus { background: transparent; border: none; padding: 10px; }
+QLabel#sidebarStatusTitle { color: @text; font-size: 11px; }
+QLabel#sidebarStatusText { color: @muted; font-size: 10px; }
+QLabel#pageTitle { font-size: 19px; font-weight: 600; }
+QLabel#settingTitle { font-size: 13px; font-weight: 500; }
+QLabel#settingDescription, QLabel#statusCardMeta, QLabel#dashboardTime {
+    color: @muted; font-size: 11px;
+}
+QFrame#settingRow { padding: 4px 0; border-bottom: 1px solid @border; }
+QFrame#panelCard, QFrame#settingsCard, QFrame#statusCard,
+QFrame#statusCardGood, QFrame#connectionCenter {
+    background: @background; border: none; border-radius: 0;
+}
+QFrame[dashboardCard="true"] { border: 1px solid @border; border-radius: 8px; }
+QLabel#heroGame { font-size: 22px; font-weight: 600; }
+QLabel#statusCardTitle { color: @muted; font-size: 11px; }
+QLabel#statusCardValue { color: @text; font-size: 20px; font-weight: 600; }
+QLabel#dashboardDetailValue, QLabel#dashboardActivityText { color: @text; font-size: 12px; }
+QLabel#inlineStatus { border-radius: 5px; padding: 5px 12px; }
+QTableWidget { background: white; color: @text; gridline-color: @border; border: 1px solid @border; }
+QComboBox::drop-down { border: none; width: 24px; }
+QCheckBox { color: @text; spacing: 8px; }
+QCheckBox::indicator { width: 14px; height: 14px; border: 1px solid #CDD1D8; border-radius: 3px; background: white; }
+QCheckBox::indicator:checked { background: @accent; border-color: @accent; }
+QPushButton#mandatoryBadge { background: @accent_soft; color: @accent; border: none; }
 """
 
 

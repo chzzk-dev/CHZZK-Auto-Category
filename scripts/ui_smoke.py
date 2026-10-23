@@ -10,9 +10,24 @@ sys.path.insert(0, str(ROOT))
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton
 from PySide6.QtGui import QFontDatabase
+from PySide6.QtCore import QByteArray, QBuffer, QIODevice
 from main import Window, apply_light_theme
 from storage import normalize_config
 from app_icons import validate_icons
+
+
+def save_preview(widget, path):
+    data = QByteArray()
+    buffer = QBuffer(data)
+    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+    if not widget.grab().save(buffer, 'PNG'):
+        return False
+    buffer.close()
+    payload = bytes(data)
+    if not payload.endswith(bytes.fromhex('0000000049454e44ae426082')):
+        return False
+    path.write_bytes(payload)
+    return True
 
 
 def main():
@@ -57,16 +72,16 @@ def main():
                     assert '분석 중' not in w.log.toPlainText()
                     for control in (w.log_filter, w.log_details):
                         assert control.parentWidget().rect().contains(control.geometry())
-                assert w.grab().save(str(destination / f'page-{i}-{width}.png'))
+                assert save_preview(w, destination / f'page-{i}-{width}.png')
                 checks.append({'page': i, 'width': width, 'height': height, 'title': w.page_title.text()})
             w.nav.setCurrentRow(3)
             w.connection_tabs.setCurrentIndex(2)
             app.processEvents()
-            assert w.grab().save(str(destination / f'steam-connection-{width}.png'))
+            assert save_preview(w, destination / f'steam-connection-{width}.png')
             w.connection_tabs.setCurrentIndex(0)
         w.tray_popup.show()
         app.processEvents()
-        assert w.tray_popup.grab().save(str(destination / 'tray.png'))
+        assert save_preview(w.tray_popup, destination / 'tray.png')
         w.tray_popup.hide()
         w.hide()
         w.show_main()
