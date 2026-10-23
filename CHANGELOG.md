@@ -5,11 +5,37 @@
 
 ## 미배포
 
+- 아직 기록할 변경 사항이 없습니다.
+
+## [4.12.12](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.12) — 2026-10-23 (KST)
+
+### 변경 사항
+
 - 업데이트 알림을 버전·변경 내역·업데이트 버튼이 있는 작은 창으로 변경하고 다운로드·설치·실패 화면에 같은 스타일을 적용합니다.
 - ‘나중에’를 선택하면 트레이의 업데이트 항목을 유지하며, 완료·실패 후 이전 진행률 애니메이션이 다시 표시되지 않도록 수정합니다.
 - 참고 디자인에 맞춰 흰색 본문, 연회색 보조 사이드바, 좁은 아이콘 메뉴와 코랄색 토글·탭으로 UI를 정리합니다.
 - 기존 게임 감지·로그·설정·트레이·업데이트 연결을 복구하고, 설정을 얇은 구분선이 있는 한 줄 구조로 표시합니다.
 - 설치 UI를 작은 코랄색 준비 화면과 흰색 설치 안내·폴더 선택·진행·완료 화면으로 변경하고 기존 MSI 복구·제거·롤백 동작을 유지합니다.
+
+### 커밋
+
+- \[cancel obsolete builds\] Release 4.12.12 with updated desktop, updater and installer UIs ([e852b82](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/e852b827853e409f3ca0230ba205f3e07cee74e3))
+- Merge pull request #3 from chzzk-dev/design/compact-msi-installer ([0116f64](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/0116f645bfd46ba2fd0b07294365bfc8e17ffbe5))
+- Merge pull request #2 from chzzk-dev/design/compact-update-dialog ([d782a30](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/d782a30b917c39f6a45ae1df9cd37e7d60a00712))
+- Keep installer notes compatible with the pending update UI changes ([915a3d6](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/915a3d6a5689cc2fb3acccf16d65c14c6aa9e081))
+- Match MSI installer to compact white and coral reference design ([2773810](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/2773810e0fb7e10219830095e6b38eaf0c93345c))
+- Add compact update notes prompt and matching progress UI ([52823de](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/52823de0ba8ebc371c699686adca5473c5001eb8))
+- Merge pull request #1 from chzzk-dev/design/white-coral-ui ([28d38eb](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/28d38ebf4850e6463e7f763eeca17456dcf82629))
+- Apply white and coral desktop UI while restoring existing controllers ([453fe63](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/453fe631d2f3a9e29780fb9d3368eda9926a5c7c))
+- Add files via upload ([f637109](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/f637109c821cb6e41431a192994576d123045d7b))
+
+[전체 변경 비교](https://github.com/chzzk-dev/CHZZK-Auto-Category/compare/v4.12.11...v4.12.12)
+
+### 설치 파일
+
+- `ChzzkAutoCategory-4.12.12.msi`
+- `SHA256SUMS.txt`에서 설치 파일의 SHA-256을 확인할 수 있습니다.
+- 기존 MSI 설치본은 새 MSI로 업그레이드하며 사용자 설정을 유지합니다.
 
 ## [4.12.11](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.11) — 2026-10-16 (KST)
 
