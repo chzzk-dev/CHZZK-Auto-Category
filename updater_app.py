@@ -46,94 +46,7 @@ STARTUP_APPROVED_KEY = r'Software\Microsoft\Windows\CurrentVersion\Explorer\Star
 AUTOSTART_VALUE = 'ChzzkAutoCategory'
 CONFIG_DIR = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'ChzzkAutoCategory'
 
-STYLE = '''
-QWidget {
-    font-family: "Pretendard", "SUIT Variable", "Noto Sans KR", "Malgun Gothic";
-    color: #1E2024;
-    font-size: 13px;
-}
-QMainWindow { background: transparent; }
-QFrame#shell {
-    background: #FFFFFF;
-    border: 1px solid #d3e5e4;
-    border-radius: 24px;
-}
-QFrame#titlebar {
-    background: transparent;
-    border: none;
-}
-QFrame#titlebarButtonWrap {
-    background: transparent;
-    border: none;
-}
-QToolButton {
-    min-width: 34px;
-    max-width: 34px;
-    min-height: 34px;
-    max-height: 34px;
-    border-radius: 10px;
-    border: 1px solid #ECEEF2;
-    background: #ffffff;
-    color: #1E2024;
-    font-size: 14px;
-}
-QToolButton:hover { background: #FFF0EE; border-color: #F4938B; }
-QToolButton#closeButton:hover { background: #fae5eb; border-color: #e9cbd4; color: #a83a55; }
-QFrame#heroCard, QFrame#panelCard, QFrame#actionCard {
-    background: #ffffff;
-    border: 1px solid #e0e9ed;
-    border-radius: 20px;
-}
-QLabel#logo {
-    background: #F0564A;
-    color: #FFFFFF;
-    border-radius: 22px;
-    font-size: 22px;
-    font-weight: 900;
-}
-QLabel#title { font-size: 28px; font-weight: 900; color: #1E2024; }
-QLabel#sub { color: #8B909A; font-size: 13px; }
-QLabel#status { font-size: 28px; font-weight: 900; color: #1E2024; }
-QLabel#detail { color: #8B909A; font-size: 13px; }
-QLabel#version {
-    color: #F0564A;
-    background: #FFF0EE;
-    border: 1px solid #F4938B;
-    border-radius: 16px;
-    padding: 10px 14px;
-    font-weight: 700;
-}
-QLabel#miniLabel { color: #8B909A; font-size: 12px; }
-QLabel#miniValue { color: #1E2024; font-size: 14px; font-weight: 700; }
-QProgressBar {
-    min-height: 16px;
-    max-height: 16px;
-    border: none;
-    border-radius: 8px;
-    background: #e9f1ef;
-    color: transparent;
-}
-QProgressBar::chunk {
-    border-radius: 8px;
-    background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #F0564A, stop:1 #F4938B);
-}
-QPushButton {
-    min-height: 46px;
-    border-radius: 14px;
-    padding: 0 18px;
-    background: #FFFFFF;
-    border: 1px solid #ECEEF2;
-    color: #1E2024;
-    font-weight: 700;
-}
-QPushButton:hover { background: #FFF0EE; border-color: #F4938B; }
-QPushButton#primary { background: #F0564A; color: #FFFFFF; border: none; }
-QPushButton#primary:hover { background: #DF4539; }
-QPushButton:disabled { color: #92a5ac; background: #eff4f5; border-color: #e0e8eb; }
-QPushButton#primary:disabled { color: #92a5ac; background: #eff4f5; border: 1px solid #e0e8eb; }
-QSizeGrip { width: 18px; height: 18px; margin: 0 2px 2px 0; }
-'''
-
+from theme import UPDATE_STYLE as STYLE
 
 
 
@@ -457,7 +370,7 @@ class _FramelessTitleBar(QFrame):
 
 
 class UpdaterWindow(QMainWindow):
-    def __init__(self, parent_pid, target_version, install_dir, restart=True, release_tag='', allow_prerelease=False):
+    def __init__(self, parent_pid, target_version, install_dir, restart=True, release_tag='', allow_prerelease=False, *, auto_start=True):
         super().__init__()
         self.restart = bool(restart)
         self.exe_path = ''
@@ -468,206 +381,93 @@ class UpdaterWindow(QMainWindow):
         self._intro_anim = None
         self._progress_anim = None
         self._pulse_anim = None
-        self.setWindowTitle('CHZZK Auto Updater')
-        self.resize(1200, 820)
-        self.setMinimumSize(1200, 820)
+        self.setWindowTitle('업데이트')
+        self.resize(600, 380)
+        self.setMinimumSize(520, 360)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet(STYLE)
-
         root = QWidget()
         outer = QVBoxLayout(root)
-        outer.setContentsMargins(18, 18, 18, 18)
-
+        outer.setContentsMargins(10, 10, 10, 10)
         shell = QFrame()
-        shell.setObjectName('shell')
+        shell.setObjectName('updateShell')
         shell_layout = QVBoxLayout(shell)
-        shell_layout.setContentsMargins(18, 16, 18, 14)
-        shell_layout.setSpacing(14)
-
-        self.titlebar = _FramelessTitleBar(self, 'CHZZK Auto Updater')
+        shell_layout.setContentsMargins(0, 0, 0, 0)
+        shell_layout.setSpacing(0)
+        self.titlebar = _FramelessTitleBar(self, '업데이트')
         shell_layout.addWidget(self.titlebar)
-
-        # Header card: brand + target version only. Keep progress content out of
-        # this row so long Korean status strings can never collide with the badge.
-        header_card = QFrame()
-        header_card.setObjectName('heroCard')
-        header_layout = QHBoxLayout(header_card)
-        header_layout.setContentsMargins(24, 20, 24, 20)
-        header_layout.setSpacing(18)
-
-        logo = QLabel('C')
-        logo.setObjectName('logo')
-        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo.setFixedSize(44, 44)
-        header_layout.addWidget(logo, 0, Qt.AlignmentFlag.AlignVCenter)
-
-        brand = QVBoxLayout()
-        brand.setSpacing(4)
-        title = QLabel('CHZZK Auto Updater')
-        title.setObjectName('title')
-        sub = QLabel('Windows Installer · MSI 업데이트')
-        sub.setObjectName('sub')
-        brand.addWidget(title)
-        brand.addWidget(sub)
-        header_layout.addLayout(brand, 1)
-
-        self.version_label = QLabel(f'버전 {target_version or "latest"}')
+        divider = QFrame()
+        divider.setObjectName('updateDivider')
+        shell_layout.addWidget(divider)
+        content = QVBoxLayout()
+        content.setContentsMargins(24, 22, 24, 22)
+        content.setSpacing(14)
+        self.version_label = QLabel(f'새 버전 {target_version or "확인 중"}')
         self.version_label.setObjectName('version')
-        self.version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.version_label.setMinimumSize(112, 66)
-        self.version_label.setMaximumWidth(150)
-        header_layout.addWidget(self.version_label, 0, Qt.AlignmentFlag.AlignVCenter)
-        shell_layout.addWidget(header_card)
-
-        # Dedicated progress card with enough vertical space for status/detail/bar.
-        progress_card = QFrame()
-        progress_card.setObjectName('panelCard')
-        progress_layout = QVBoxLayout(progress_card)
-        progress_layout.setContentsMargins(24, 20, 24, 20)
-        progress_layout.setSpacing(10)
-
+        content.addWidget(self.version_label)
         status_row = QHBoxLayout()
-        status_row.setSpacing(10)
+        status_row.setSpacing(8)
         self.activity_dot = QLabel('●')
-        self.activity_dot.setStyleSheet('color: #17916a; font-size: 15px;')
-        self.activity_dot.setFixedWidth(18)
+        self.activity_dot.setStyleSheet('color: #F0564A; font-size: 11px;')
         status_row.addWidget(self.activity_dot, 0, Qt.AlignmentFlag.AlignTop)
-
         self.status_label = QLabel(self.status_base)
         self.status_label.setObjectName('status')
         self.status_label.setWordWrap(True)
-        self.status_label.setMinimumHeight(42)
         status_row.addWidget(self.status_label, 1)
-        progress_layout.addLayout(status_row)
-
-        dot_effect = QGraphicsOpacityEffect(self.activity_dot)
-        self.activity_dot.setGraphicsEffect(dot_effect)
-        self._pulse_anim = QPropertyAnimation(dot_effect, b'opacity', self)
-        self._pulse_anim.setDuration(1200)
-        self._pulse_anim.setStartValue(0.35)
-        self._pulse_anim.setKeyValueAt(0.5, 1.0)
-        self._pulse_anim.setEndValue(0.35)
-        self._pulse_anim.setLoopCount(-1)
-        self._pulse_anim.start()
-
-        self.detail_label = QLabel('GitHub 릴리즈를 확인하고 업데이트를 준비하고 있습니다.')
+        content.addLayout(status_row)
+        self.detail_label = QLabel('업데이트를 확인하고 있습니다.')
         self.detail_label.setObjectName('detail')
         self.detail_label.setWordWrap(True)
-        self.detail_label.setMinimumHeight(24)
-        progress_layout.addWidget(self.detail_label)
-
+        self.detail_label.setMinimumHeight(58)
+        content.addWidget(self.detail_label)
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
         self.progress.setTextVisible(False)
-        progress_layout.addWidget(self.progress)
-
+        content.addWidget(self.progress)
         progress_meta = QHBoxLayout()
         self.phase_label = QLabel('업데이트 준비')
         self.phase_label.setObjectName('miniLabel')
+        self.phase_label.setWordWrap(True)
+        self.step_value = self.phase_label
         self.percent = QLabel('0%')
         self.percent.setObjectName('miniValue')
-        progress_meta.addWidget(self.phase_label)
-        progress_meta.addStretch()
+        progress_meta.addWidget(self.phase_label, 1)
         progress_meta.addWidget(self.percent)
-        progress_layout.addLayout(progress_meta)
-        shell_layout.addWidget(progress_card)
-
-        lower = QHBoxLayout()
-        lower.setSpacing(14)
-
-        panel = QFrame()
-        panel.setObjectName('panelCard')
-        panel_layout = QVBoxLayout(panel)
-        panel_layout.setContentsMargins(20, 18, 20, 18)
-        panel_layout.setSpacing(9)
-        panel_title = QLabel('현재 작업')
-        panel_title.setStyleSheet('font-size: 16px; font-weight: 800; color: #1E2024;')
-        panel_layout.addWidget(panel_title)
-
-        def _meta_row(label_text, value_text='-'):
-            row = QHBoxLayout()
-            row.setSpacing(12)
-            label = QLabel(label_text)
-            label.setObjectName('miniLabel')
-            label.setMinimumWidth(98)
-            value = QLabel(value_text)
-            value.setObjectName('miniValue')
-            value.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            row.addWidget(label)
-            row.addStretch()
-            row.addWidget(value)
-            return row, value
-
-        row, self.step_value = _meta_row('상태', '대기 중')
-        panel_layout.addLayout(row)
-        row, self.source_value = _meta_row('소스', 'GitHub Release')
-        panel_layout.addLayout(row)
-        row, self.restart_value = _meta_row('업데이트 후 실행', '예' if self.restart else '아니오')
-        panel_layout.addLayout(row)
-
-        install_label = QLabel('설치 위치')
-        install_label.setObjectName('miniLabel')
-        panel_layout.addWidget(install_label)
-        self.install_value = QLabel(str(install_dir))
-        self.install_value.setObjectName('miniValue')
-        self.install_value.setWordWrap(True)
-        self.install_value.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        panel_layout.addWidget(self.install_value)
-        panel_layout.addStretch()
-        lower.addWidget(panel, 1)
-
-        actions = QFrame()
-        actions.setObjectName('actionCard')
-        actions.setMinimumWidth(280)
-        actions.setMaximumWidth(310)
-        actions_layout = QVBoxLayout(actions)
-        actions_layout.setContentsMargins(20, 18, 20, 18)
-        actions_layout.setSpacing(12)
-        actions_title = QLabel('빠른 동작')
-        actions_title.setStyleSheet('font-size: 16px; font-weight: 800; color: #1E2024;')
-        actions_layout.addWidget(actions_title)
-        actions_help = QLabel('업데이트가 완료되면 새 버전을 바로 실행하거나 창만 닫을 수 있습니다.')
-        actions_help.setObjectName('miniLabel')
-        actions_help.setWordWrap(True)
-        actions_layout.addWidget(actions_help)
-        actions_layout.addStretch()
-
-        self.launch_button = QPushButton('백그라운드로 실행')
-        self.launch_button.setObjectName('primary')
-        self.launch_button.setEnabled(False)
-        self.launch_button.clicked.connect(self.launch_app)
-        actions_layout.addWidget(self.launch_button)
-
+        content.addLayout(progress_meta)
+        content.addStretch()
+        self.keep_open_note = QLabel('업데이트가 끝날 때까지 창을 열어두세요.')
+        self.keep_open_note.setObjectName('updateCaption')
+        self.keep_open_note.setWordWrap(True)
+        content.addWidget(self.keep_open_note)
+        actions = QHBoxLayout()
+        actions.addStretch()
         self.close_button = QPushButton('닫기')
         self.close_button.setEnabled(False)
         self.close_button.clicked.connect(self.close)
-        actions_layout.addWidget(self.close_button)
-        lower.addWidget(actions, 0)
-
-        shell_layout.addLayout(lower, 1)
-
-        grip_row = QHBoxLayout()
-        grip_row.setContentsMargins(0, 0, 0, 0)
-        grip_row.addStretch()
-        grip_row.addWidget(QSizeGrip(shell), 0, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignRight)
-        shell_layout.addLayout(grip_row)
-
+        actions.addWidget(self.close_button)
+        self.launch_button = QPushButton('앱 실행')
+        self.launch_button.setObjectName('primary')
+        self.launch_button.setEnabled(False)
+        self.launch_button.clicked.connect(self.launch_app)
+        actions.addWidget(self.launch_button)
+        content.addLayout(actions)
+        shell_layout.addLayout(content)
         outer.addWidget(shell)
         self.setCentralWidget(root)
-
         shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(48)
-        shadow.setOffset(0, 14)
-        shadow.setColor(QColor(16, 57, 46, 55))
+        shadow.setBlurRadius(18)
+        shadow.setOffset(0, 4)
+        shadow.setColor(QColor(0, 0, 0, 35))
         shell.setGraphicsEffect(shadow)
         self._shadow = shadow
 
         self.anim = QTimer(self)
         self.anim.setInterval(330)
         self.anim.timeout.connect(self.animate_status)
-        self.anim.start()
+        if auto_start:
+            self.anim.start()
 
         self.worker = UpdateWorker(parent_pid, target_version, install_dir, restart, self)
         self.worker.release_tag = release_tag
@@ -678,8 +478,9 @@ class UpdaterWindow(QMainWindow):
         self.worker.version.connect(lambda value: self.version_label.setText(f'버전 {value}'))
         self.worker.finished_ok.connect(self.update_done)
         self.worker.failed.connect(self.update_failed)
-        QTimer.singleShot(20, self._start_intro_animation)
-        QTimer.singleShot(450, self.worker.start)
+        if auto_start:
+            QTimer.singleShot(20, self._start_intro_animation)
+            QTimer.singleShot(450, self.worker.start)
 
     def _start_intro_animation(self):
         self.setWindowOpacity(0.0)
@@ -718,6 +519,8 @@ class UpdaterWindow(QMainWindow):
     def update_done(self, exe_path):
         self.exe_path = exe_path
         self.anim.stop()
+        if self._progress_anim:
+            self._progress_anim.stop()
         self.progress.setValue(100)
         self.percent.setText('100%')
         self.status_label.setText('업데이트 완료 ✓')
@@ -726,9 +529,10 @@ class UpdaterWindow(QMainWindow):
         self.detail_label.setText('Windows Installer가 새 버전 설치를 완료했습니다.')
         if self._pulse_anim:
             self._pulse_anim.stop()
-            self.activity_dot.setStyleSheet('color: #59e6b9; font-size: 15px;')
+            self.activity_dot.setStyleSheet('color: #F0564A; font-size: 11px;')
         self.launch_button.setEnabled(not self.worker.reboot_required)
         self.close_button.setEnabled(True)
+        self.keep_open_note.setText('업데이트가 완료되었습니다. 창을 닫아도 됩니다.')
         if self.worker.reboot_required:
             self.detail_label.setText('설치를 마치려면 Windows를 다시 시작해 주세요. 자동으로 재부팅하지 않습니다.')
             return
@@ -737,6 +541,8 @@ class UpdaterWindow(QMainWindow):
 
     def update_failed(self, error):
         self.anim.stop()
+        if self._progress_anim:
+            self._progress_anim.stop()
         self.status_label.setText('업데이트 실패')
         self.phase_label.setText('오류')
         self.step_value.setText('오류')
@@ -745,8 +551,9 @@ class UpdaterWindow(QMainWindow):
         self.percent.setText('오류')
         if self._pulse_anim:
             self._pulse_anim.stop()
-            self.activity_dot.setStyleSheet('color: #ff6d83; font-size: 15px;')
+            self.activity_dot.setStyleSheet('color: #E11D48; font-size: 11px;')
         self.close_button.setEnabled(True)
+        self.keep_open_note.setText('창을 닫은 뒤 업데이트를 다시 시도할 수 있습니다.')
         if Path(self.previous_exe_path).is_file():
             self.exe_path = self.previous_exe_path
             self.launch_button.setText('기존 프로그램 다시 실행')

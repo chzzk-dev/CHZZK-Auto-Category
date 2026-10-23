@@ -632,8 +632,8 @@ QPushButton#mandatoryBadge { background: @accent_soft; color: @accent; border: n
 """
 
 
-def _compile_style(tokens: dict[str, str]) -> str:
-    style = _STYLE_TEMPLATE
+def _compile_style(tokens: dict[str, str], template: str = _STYLE_TEMPLATE) -> str:
+    style = template
     # Sort keys by length descending so @accent_border is replaced before @accent
     for key in sorted(tokens.keys(), key=len, reverse=True):
         style = style.replace(f'@{key}', tokens[key])
@@ -641,6 +641,29 @@ def _compile_style(tokens: dict[str, str]) -> str:
 
 
 STYLE: str = _compile_style(TOKENS)
+
+UPDATE_STYLE = STYLE + _compile_style(TOKENS, """
+QMainWindow { background: @background; }
+QFrame#updateShell { background: @background; border: 1px solid @border; border-radius: 6px; }
+QLabel#updateHeading { color: @text; font-size: 15px; font-weight: 600; }
+QLabel#updateVersion { color: @text; font-size: 14px; font-weight: 600; }
+QLabel#updateCaption { color: @muted; font-size: 11px; }
+QFrame#updateDivider { background: @border; min-height: 1px; max-height: 1px; border: none; }
+QTextBrowser#releaseNotes { background: @background; color: @text; border: none; padding: 0; font-size: 12px; }
+QLabel#updateNotice { color: @accent; font-size: 11px; }
+QLabel#updateError { color: @error; font-size: 12px; }
+QLabel#status { color: @text; font-size: 16px; font-weight: 600; }
+QLabel#detail, QLabel#miniLabel { color: @muted; font-size: 12px; }
+QLabel#miniValue { color: @text; font-size: 12px; }
+QLabel#version { color: @muted; font-size: 11px; }
+QProgressBar { min-height: 5px; max-height: 5px; background: @border; border: none; border-radius: 2px; color: transparent; }
+QProgressBar::chunk { background: @accent; border-radius: 2px; }
+QToolButton { min-width: 26px; max-width: 26px; min-height: 24px; max-height: 24px; padding: 0; border: none; background: transparent; }
+QToolButton:hover { background: @hover; }
+QToolButton#closeButton:hover { background: @accent_soft; color: @error; }
+QPushButton { min-height: 18px; padding: 8px 14px; border-radius: 4px; font-size: 12px; }
+QPushButton#primary:disabled { background: #F5F6F8; color: #B4B8C2; border: 1px solid @border; }
+""")
 
 
 def set_accent_palette(palette_name: str = 'coral', app=None) -> str:

@@ -30,6 +30,42 @@ def save_preview(widget, path):
     return True
 
 
+def render_update_windows(app, destination):
+    from updater import AutoUpdateWindow
+    from updater_app import UpdaterWindow
+    # Preview fixtures only: the real installer and network are never started.
+    prompt = AutoUpdateWindow({'version': '4.12.12', 'release_notes':
+        '### 변경 사항\n\n- 업데이트 화면을 새 디자인으로 정리했습니다.\n- 진행 상태와 변경 내역을 확인할 수 있습니다.'})
+    prompt.show()
+    app.processEvents()
+    assert not prompt.started and prompt.update_button.isEnabled()
+    assert save_preview(prompt, destination / 'update-prompt.png')
+    prompt.hide()
+    with tempfile.TemporaryDirectory() as directory:
+        progress = UpdaterWindow(0, '4.12.12', directory, restart=False, auto_start=False)
+        progress.show()
+        progress.set_status('업데이트 다운로드 중')
+        progress.set_progress(62)
+        progress._progress_anim.setCurrentTime(280)
+        app.processEvents()
+        assert progress.progress.value() == 62
+        assert save_preview(progress, destination / 'update-download.png')
+        progress.update_done(str(Path(directory) / 'app.exe'))
+        app.processEvents()
+        assert progress.progress.value() == 100 and progress.launch_button.isEnabled()
+        assert save_preview(progress, destination / 'update-complete.png')
+        progress.update_failed('설치를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+        app.processEvents()
+        assert progress.close_button.isEnabled()
+        for widget in (progress.launch_button, progress.close_button):
+            assert widget.parentWidget().rect().contains(widget.geometry())
+        assert save_preview(progress, destination / 'update-error.png')
+        progress.hide()
+        progress.deleteLater()
+    prompt.deleteLater()
+    app.processEvents()
+
+
 def main():
     app = QApplication([])
     font = os.environ.get('CHZZK_UI_TEST_FONT')
@@ -92,7 +128,9 @@ def main():
         w.deleteLater()
         app.processEvents()
     (destination / 'checks.json').write_text(json.dumps(checks, ensure_ascii=False, indent=2), encoding='utf-8')
+    render_update_windows(app, destination)
     print(f'Qt scale {os.environ.get("QT_SCALE_FACTOR", "1")}: 18 page/size renders, dashboard alignment, icons, popup and restore passed')
+    print('Update prompt, download, completion and error previews passed without starting the installer')
 
 
 if __name__ == '__main__':
