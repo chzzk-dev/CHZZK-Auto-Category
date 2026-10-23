@@ -1,0 +1,39 @@
+name: Installer UI preview
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'installer/modern-ui/**'
+      - 'chzzk_auto_category.ico'
+      - '.github/workflows/installer-ui-preview.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Compile the actual installer view
+        run: dotnet build installer/modern-ui/ChzzkInstallerUI.csproj --configuration Release -p:Platform=x64 --output build/msi/modern-ui
+      - name: Check MSI state rules
+        run: dotnet run --project installer/modern-ui/tests/StateTests.csproj --configuration Release
+      - name: Compile the WPF smoke host
+        run: dotnet build installer/modern-ui/tests/UiSmoke.csproj --configuration Release --output build/ui-smoke
+      - name: Exercise installer navigation and capture WPF at four scales
+        run: |
+          & ./build/ui-smoke/UiSmoke.exe build/installer-ui-preview
+          if ($LASTEXITCODE -ne 0) { throw 'Installer UI flow verification failed.' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Installer-WPF-preview
+          path: build/installer-ui-preview/*.png
+          if-no-files-found: warn
+          retention-days: 14
