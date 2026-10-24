@@ -5,9 +5,30 @@
 
 ## 미배포
 
+- 아직 기록할 변경 사항이 없습니다.
+
+## [4.12.15](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.15) — 2026-10-24 (KST)
+
+### 변경 사항
+
 - 대시보드를 원형 상태 표시·자동 변경 토글·업데이트 확인·기간 선택·네 개 활동 통계 카드로 구성하고, 대시보드에서는 보조 사이드바를 숨깁니다.
 - 불필요한 사이드바 하단과 버전 정책 안내를 제거하고, 확장 버전을 실제 응답으로 갱신하며 업데이트 확인 결과를 화면 안에 유지합니다.
 - 활동 통계는 업데이트 후 기록된 실제 실행·연결·변경·확인 요청을 일별로 집계하며, 최근 90일 기록에서 오늘·7일·30일을 조회할 수 있습니다.
+
+### 커밋
+
+- \[cancel obsolete builds\] Release 4.12.15 with complete dashboard controls and statistics ([885ff6c](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/885ff6ca6a20282c69877cff8bb51fe806a93279))
+- Merge pull request #6 from chzzk-dev/design/dashboard-focus ([292367e](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/292367ecf3c9f207c0ca245383badf877a5f68f1))
+- Isolate update retry test from persistent activity log handles ([65d30e7](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/65d30e74ec2faee7231c71e66dcb074f1e1965e6))
+- Build focused dashboard with real activity counters and inline updates ([c6affdb](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/c6affdb62cdaa08ecfe7484b604477eb8ded81cd))
+
+[전체 변경 비교](https://github.com/chzzk-dev/CHZZK-Auto-Category/compare/v4.12.14...v4.12.15)
+
+### 설치 파일
+
+- `ChzzkAutoCategory-4.12.15.msi`
+- `SHA256SUMS.txt`에서 설치 파일의 SHA-256을 확인할 수 있습니다.
+- 기존 MSI 설치본은 새 MSI로 업그레이드하며 사용자 설정을 유지합니다.
 
 ## [4.12.14](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.14) — 2026-10-24 (KST)
 
