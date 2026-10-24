@@ -158,7 +158,8 @@ class DashboardFocusTests(unittest.TestCase):
     def test_update_check_disables_duplicate_actions_and_allows_retry_after_failure(self):
         w = self.window
         w.preview = False
-        with patch('main.sys.platform', 'win32'), patch('main.sys.frozen', True, create=True), patch('main.UpdateCheckWorker') as checker:
+        with patch('main.sys.platform', 'win32'), patch('main.sys.frozen', True, create=True), \
+                patch('main.UpdateCheckWorker') as checker, patch('diagnostics.record_log'):
             w.check_for_updates_manual()
             self.assertFalse(w.update_check_button.isEnabled())
             self.assertFalse(w.dashboard_update_button.isEnabled())
