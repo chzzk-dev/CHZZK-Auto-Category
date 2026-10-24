@@ -5,7 +5,28 @@
 
 ## 미배포
 
+- 아직 기록할 변경 사항이 없습니다.
+
+## [4.12.14](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.14) — 2026-10-24 (KST)
+
+### 변경 사항
+
 - 업데이트 중 기존 앱을 강제로 종료할 때 업데이트 프로그램까지 함께 종료되는 문제와, 앱 종료 완료 신호를 놓치는 문제를 수정합니다.
+
+### 커밋
+
+- \[cancel obsolete builds\] Release 4.12.14 with updater shutdown fix ([8968036](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/8968036afbc6f5ba3cfa00a6dd8c70df099a08be))
+- Merge pull request #5 from chzzk-dev/fix/updater-survives-app-exit ([ce88363](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/ce883633a02fd925c8d18998c0e2501cbfb856ef))
+- Use Windows process handles for updater lifecycle regression ([6e2b70d](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/6e2b70d7e371626d2ddafc8dce31646f34348bd0))
+- Keep the updater alive when the app exits ([7468038](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/74680384017dd5e5b2dd615c93cf460fd253c065))
+
+[전체 변경 비교](https://github.com/chzzk-dev/CHZZK-Auto-Category/compare/v4.12.13...v4.12.14)
+
+### 설치 파일
+
+- `ChzzkAutoCategory-4.12.14.msi`
+- `SHA256SUMS.txt`에서 설치 파일의 SHA-256을 확인할 수 있습니다.
+- 기존 MSI 설치본은 새 MSI로 업그레이드하며 사용자 설정을 유지합니다.
 
 ## [4.12.13](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.13) — 2026-10-23 (KST)
 
