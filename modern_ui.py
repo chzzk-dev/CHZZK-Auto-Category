@@ -9,14 +9,16 @@ from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QSize, QTimer
 from PySide6.QtWidgets import (QWidget, QFrame, QLabel, QVBoxLayout, QHBoxLayout,
     QGridLayout, QScrollArea, QTabWidget, QListWidgetItem, QComboBox, QLineEdit,
     QCheckBox, QTableView, QHeaderView, QAbstractItemView, QPushButton, QDialog,
-    QFormLayout, QTextEdit, QApplication, QToolButton, QLayout, QSizePolicy)
+    QFormLayout, QTextEdit, QApplication, QToolButton, QLayout, QSizePolicy, QGraphicsDropShadowEffect)
+from PySide6.QtGui import QColor
 from app_icons import app_icon, set_button_icon
 from core import Rule
 from normalization import normalized_name, alias_conflicts
 from scheduling import HOUR_OPTIONS
-from storage import save_config, get_steam_api_key
+from storage import save_config, get_steam_api_key, data_dir
+from activity_stats import ActivityStats
 from theme import TOKENS
-from ui_components import ToggleSwitch, SettingsComboBox as QComboBox, FramelessDialog as QDialog
+from ui_components import ToggleSwitch, StatusRing, SettingsComboBox as QComboBox, FramelessDialog as QDialog
 from version import APP_VERSION
 
 PAGES = (
@@ -222,6 +224,7 @@ class ModernWindowMixin:
         self.connection_failures = 0
         self.last_category_observed_at = 0
         self.last_applied_at = None
+        self.activity_stats = ActivityStats(None if preview else data_dir() / 'activity-stats.json')
         super().__init__(config, preview)
         # Reparent existing functional pages, keeping controller fields/signals alive.
         old = [self.pages.widget(i) for i in range(self.pages.count())]
@@ -239,6 +242,7 @@ class ModernWindowMixin:
         self.setting_tabs.addTab(self.build_program_settings(), '일반')
         self.setting_tabs.addTab(scroll_page(old[6]), '업데이트')
         self.setting_tabs.addTab(scroll_page(old[7]), '정보')
+        self.setting_tabs.currentChanged.connect(lambda *_: self.refresh_connection_page())
         for page in (self.dashboard, self.game_tabs, old[5], self.connection_tabs, self.setting_tabs, old[4]):
             self.pages.addWidget(page)
         self.nav.blockSignals(True)
@@ -282,6 +286,7 @@ class ModernWindowMixin:
 
     def install_icon_rail(self):
         sidebar = self.findChild(QFrame, 'sidebar')
+        self.navigation_sidebar = sidebar
         body = sidebar.parentWidget().layout()
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(0)
@@ -291,12 +296,15 @@ class ModernWindowMixin:
         self.findChild(QLabel, 'brandSub').hide()
         self.findChild(QLabel, 'brandTitle').setText('CHZZK 설정')
         self.findChild(QLabel, 'navSection').setText('방송 카테고리 자동화')
+        self.findChild(QFrame, 'sidebarStatus').hide()
+        self.findChild(QPushButton, 'sidebarTrayButton').hide()
         self.icon_rail = QFrame()
         self.icon_rail.setObjectName('iconRail')
         rail = QVBoxLayout(self.icon_rail)
         rail.setContentsMargins(8, 14, 8, 14)
         rail.setSpacing(14)
         brand = QToolButton()
+        self.rail_brand = brand
         brand.setObjectName('railBrand')
         brand.setIcon(app_icon('games', TOKENS['accent']))
         brand.setIconSize(QSize(23, 23))
@@ -317,26 +325,77 @@ class ModernWindowMixin:
             rail.addWidget(button, 0, Qt.AlignmentFlag.AlignHCenter)
             self.rail_buttons[page] = (button, name)
         rail.addStretch()
-        for page, name, title in ((5, 'logs', '로그'), (4, 'settings', '설정')):
+        self.rail_help_button = QToolButton()
+        self.rail_help_button.setObjectName('railButton')
+        self.rail_help_button.setToolTip('사용 안내')
+        self.rail_help_button.setAccessibleName('사용 안내')
+        self.rail_help_button.setIcon(app_icon('help', TOKENS['muted']))
+        self.rail_help_button.setIconSize(QSize(19, 19))
+        self.rail_help_button.clicked.connect(self.show_usage_guide)
+        rail.addWidget(self.rail_help_button, 0, Qt.AlignmentFlag.AlignHCenter)
+        self.rail_about_button = QToolButton()
+        self.rail_about_button.setObjectName('railButton')
+        self.rail_about_button.setToolTip('프로그램 정보')
+        self.rail_about_button.setAccessibleName('프로그램 정보')
+        self.rail_about_button.setIcon(app_icon('info', TOKENS['muted']))
+        self.rail_about_button.setIconSize(QSize(19, 19))
+        self.rail_about_button.clicked.connect(self.open_about)
+        rail.addWidget(self.rail_about_button, 0, Qt.AlignmentFlag.AlignHCenter)
+        for page, name, title in ((4, 'settings', '설정'),):
             button = QToolButton()
             button.setObjectName('railButton')
             button.setToolTip(title)
             button.setAccessibleName(title)
             button.setIconSize(QSize(17, 17))
-            button.clicked.connect(lambda checked=False, target=page: self.nav.setCurrentRow(target))
+            button.clicked.connect(self.open_program_settings)
             rail.addWidget(button, 0, Qt.AlignmentFlag.AlignHCenter)
             self.rail_buttons[page] = (button, name)
         body.insertWidget(0, self.icon_rail)
         self.nav.currentRowChanged.connect(self.sync_navigation_icons)
         self.sync_navigation_icons(0)
+        self.setting_tabs.currentChanged.connect(lambda *_: self.sync_navigation_icons(self.nav.currentRow()))
+
+    def open_program_settings(self):
+        self.nav.setCurrentRow(4)
+        self.setting_tabs.setCurrentIndex(0)
+
+    def open_about(self):
+        self.nav.setCurrentRow(4)
+        self.setting_tabs.setCurrentIndex(2)
+
+    def show_usage_guide(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle('사용 안내')
+        dialog.resize(520, 360)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(24, 22, 24, 20)
+        layout.setSpacing(18)
+        layout.addWidget(label('자동 카테고리 변경 시작하기', 'sectionTitle'))
+        for text in ('1. 연결 관리에서 확장프로그램과 치지직 계정을 연결해 주세요.',
+                     '2. 게임을 실행하면 자동으로 감지하고 카테고리를 찾습니다.',
+                     '3. 대시보드의 자동 변경을 켜 주세요. 확인 요청은 게임 목록에서 처리할 수 있습니다.'):
+            layout.addWidget(label(text, 'aboutDetail'))
+        row = QHBoxLayout()
+        row.addWidget(action('연결 관리', lambda: (self.nav.setCurrentRow(3), dialog.accept()), 'connections', True))
+        row.addStretch()
+        row.addWidget(action('닫기', dialog.accept, 'close'))
+        layout.addLayout(row)
+        dialog.exec()
+        dialog.deleteLater()
 
     def sync_navigation_icons(self, current):
         for i, (_, _, name) in enumerate(PAGES):
             self.nav.item(i).setIcon(app_icon(name, TOKENS['accent'] if i == current else TOKENS['muted']))
         active = 1 if current == 2 else current
+        about = current == 4 and self.setting_tabs.currentIndex() == 2
+        self.rail_about_button.setProperty('active', about)
+        self.rail_about_button.setIcon(app_icon('info', TOKENS['accent'] if about else TOKENS['muted']))
+        self.rail_about_button.style().unpolish(self.rail_about_button)
+        self.rail_about_button.style().polish(self.rail_about_button)
         for page, (button, name) in self.rail_buttons.items():
-            button.setProperty('active', page == active)
-            button.setIcon(app_icon(name, TOKENS['accent'] if page == active else TOKENS['muted']))
+            selected = page == active and not about
+            button.setProperty('active', selected)
+            button.setIcon(app_icon(name, TOKENS['accent'] if selected else TOKENS['muted']))
             button.style().unpolish(button)
             button.style().polish(button)
 
@@ -416,6 +475,16 @@ class ModernWindowMixin:
         if not 0 <= index < len(PAGES):
             return
         self.pages.setCurrentIndex(index)
+        dashboard = index == 0
+        self.navigation_sidebar.setVisible(not dashboard)
+        self.rail_brand.setVisible(not dashboard)
+        for widget in (self.page_title, self.page_sub, self.toggle_button):
+            widget.setVisible(not dashboard)
+        for name in ('titleBarApp', 'titleBarVersion'):
+            self.findChild(QLabel, name).setVisible(not dashboard)
+        content = self.findChild(QFrame, 'contentCard').layout()
+        content.setContentsMargins(28 if dashboard else 32, 0 if dashboard else 24, 28 if dashboard else 32, 24)
+        content.setSpacing(0 if dashboard else 15)
         self.page_title.setText(PAGES[index][0])
         self.page_sub.setText(PAGES[index][1])
         for i, (_, _, name) in enumerate(PAGES):
@@ -437,100 +506,138 @@ class ModernWindowMixin:
         page = QWidget()
         page.setObjectName('dashboardPage')
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 4, 0, 0)
-        layout.setSpacing(12)
-        self.dashboard_values = {}
-        self.dashboard_summary_cards = []
-        summary = QGridLayout()
-        summary.setSpacing(12)
-        for column, (key, title) in enumerate((('automation', '자동화 상태'),
-                ('category', '치지직 카테고리'), ('extension', '브라우저 확장프로그램'))):
-            c, dot, value, meta = self._make_status_card(title, '확인 전', '')
-            c.setProperty('dashboardCard', True)
-            c.layout().setContentsMargins(18, 16, 18, 16)
-            c.layout().setSpacing(8)
-            self.dashboard_values[key] = (value, meta, dot)
-            self.dashboard_summary_cards.append(c)
-            summary.addWidget(c, 0, column)
-            summary.setColumnStretch(column, 1)
-        layout.addLayout(summary)
+        layout.setContentsMargins(20, 8, 20, 16)
+        layout.setSpacing(0)
+        layout.addStretch(3)
 
-        detail = QGridLayout()
-        detail.setSpacing(12)
-        detail.setColumnStretch(0, 1)
-        hero, box = card('현재 실행 중인 게임')
-        hero.setProperty('dashboardCard', True)
-        self.dashboard_game_card = hero
-        self.dashboard_game_dot = QLabel()
-        self.dashboard_game_dot.setFixedSize(16, 16)
-        title = box.takeAt(0).widget()
-        header = QHBoxLayout()
-        header.setSpacing(8)
-        header.addWidget(self.dashboard_game_dot)
-        header.addWidget(title, 1)
-        manage = action('게임 관리', lambda: self.nav.setCurrentRow(1), 'games')
-        manage.setObjectName('dashboardAction')
-        header.addWidget(manage)
-        box.addLayout(header)
-        self.dashboard_game = label('현재 실행 중인 게임이 없습니다.', 'heroGame')
-        box.addWidget(self.dashboard_game)
-        self.dashboard_empty_hint = label('게임을 실행하면 자동으로 감지하여 방송 카테고리를 검색합니다.')
-        box.addWidget(self.dashboard_empty_hint)
-        self.dashboard_game_details = QWidget()
-        fields = QGridLayout(self.dashboard_game_details)
-        fields.setContentsMargins(0, 8, 0, 0)
-        fields.setHorizontalSpacing(18)
-        fields.setVerticalSpacing(16)
-        self.dashboard_process = label('', 'dashboardDetailValue')
-        self.dashboard_target = label('', 'dashboardDetailValue')
-        self.dashboard_method = label('Discord 게임 목록', 'dashboardDetailValue')
+        self.dashboard_hero = QFrame()
+        self.dashboard_hero.setObjectName('dashboardHero')
+        self.dashboard_hero.setMaximumWidth(940)
+        self.dashboard_hero.setMinimumWidth(800)
+        hero = QHBoxLayout(self.dashboard_hero)
+        hero.setContentsMargins(20, 12, 20, 12)
+        hero.setSpacing(36)
+        self.dashboard_ring = StatusRing()
+        hero.addWidget(self.dashboard_ring, 0, Qt.AlignmentFlag.AlignVCenter)
+        text = QVBoxLayout()
+        text.setSpacing(8)
+        controls = QHBoxLayout()
+        controls.setSpacing(10)
+        self.dashboard_toggle = ToggleSwitch('자동 카테고리 변경')
+        self.dashboard_toggle.clicked.connect(self.toggle_dashboard_automation)
+        controls.addWidget(self.dashboard_toggle)
+        controls.addWidget(label('자동 변경', 'dashboardControlLabel'))
+        self.dashboard_update_button = action('업데이트 확인', self.open_pending_update, 'refresh')
+        self.dashboard_update_button.setObjectName('dashboardTextButton')
+        controls.addWidget(self.dashboard_update_button)
+        controls.addStretch()
+        text.addLayout(controls)
+        self.dashboard_title = label('', 'dashboardHeadline')
+        self.dashboard_title.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        text.addWidget(self.dashboard_title)
+        self.dashboard_description = label('', 'dashboardDescription')
+        self.dashboard_description.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        text.addWidget(self.dashboard_description)
+        self.dashboard_game = label('', 'dashboardGameName')
+        self.dashboard_game.setWordWrap(False)
+        self.dashboard_game.setMaximumWidth(300)
+        self.dashboard_game.setMinimumWidth(0)
         self.dashboard_game_meta = label('', 'dashboardDetailValue')
-        for i, (text, value) in enumerate((('실행 파일', self.dashboard_process),
-                ('연결 카테고리', self.dashboard_target), ('감지 방식', self.dashboard_method),
-                ('감지 및 매칭', self.dashboard_game_meta))):
-            field = QVBoxLayout()
-            field.setSpacing(5)
-            field.addWidget(label(text, 'statusCardTitle'))
-            field.addWidget(value)
-            fields.addLayout(field, 0, i)
-            fields.setColumnStretch(i, 1)
-        box.addWidget(self.dashboard_game_details)
-        box.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.dashboard_values['game'] = (self.dashboard_game, self.dashboard_game_meta,
-                                         self.dashboard_game_dot)
-        detail.addWidget(hero, 0, 0)
-        activity, box = card('최근 활동')
-        activity.setProperty('dashboardCard', True)
-        self.dashboard_activity_card = activity
-        title = box.takeAt(0).widget()
-        header = QHBoxLayout()
-        header.addWidget(title, 1)
+        game_line = QHBoxLayout()
+        game_line.addWidget(self.dashboard_game)
+        game_line.addWidget(self.dashboard_game_meta)
+        game_line.addStretch()
+        text.addLayout(game_line)
+        self.dashboard_category = label('', 'dashboardConnectionText')
+        self.dashboard_extension = label('', 'dashboardConnectionText')
+        text.addWidget(self.dashboard_category)
+        text.addWidget(self.dashboard_extension)
+        self.dashboard_update_status = label('', 'dashboardConnectionText')
+        self.dashboard_update_status.hide()
+        text.addWidget(self.dashboard_update_status)
+        hero.addLayout(text, 1)
+        layout.addWidget(self.dashboard_hero, 0, Qt.AlignmentFlag.AlignHCenter)
+        layout.addStretch(4)
+
+        statistics = QWidget()
+        statistics.setObjectName('dashboardStatistics')
+        statistics.setMaximumWidth(1060)
+        statistics.setMinimumWidth(800)
+        stats_layout = QVBoxLayout(statistics)
+        stats_layout.setContentsMargins(12, 0, 12, 12)
+        stats_layout.setSpacing(14)
+        toolbar = QHBoxLayout()
+        toolbar.addWidget(label('활동 통계', 'dashboardSectionTitle'))
+        toolbar.addStretch()
+        calendar = QToolButton()
+        calendar.setObjectName('dashboardCalendar')
+        calendar.setIcon(app_icon('calendar', TOKENS['muted']))
+        calendar.setIconSize(QSize(16, 16))
+        calendar.setToolTip('통계 기간 선택')
+        calendar.setAccessibleName('통계 기간 선택')
+        calendar.clicked.connect(lambda: self.dashboard_period.showPopup())
+        toolbar.addWidget(calendar)
+        self.dashboard_period = QComboBox()
+        self.dashboard_period.setObjectName('dashboardPeriod')
+        self.dashboard_period.setAccessibleName('활동 통계 기간')
+        for title, days in (('오늘', 1), ('최근 7일', 7), ('최근 30일', 30)):
+            self.dashboard_period.addItem(title, days)
+        self.dashboard_period.currentIndexChanged.connect(self.refresh_dashboard_statistics)
+        toolbar.addWidget(self.dashboard_period)
+        stats_layout.addLayout(toolbar)
+        row = QHBoxLayout()
+        row.setSpacing(16)
+        self.dashboard_metric_cards = []
+        self.dashboard_metrics = {}
+        for key, title, icon, hint in (
+                ('detected', '감지한 게임', 'games', '선택한 기간에 새로 감지한 게임 실행 횟수입니다.'),
+                ('matched', '카테고리 연결', 'connections', '게임의 카테고리 연결을 확인한 횟수입니다.'),
+                ('changed', '카테고리 변경', 'refresh', '실제 방송 카테고리가 변경된 횟수입니다.'),
+                ('pending', '확인 요청', 'warning', '직접 확인이 필요했던 게임의 실행 횟수입니다.')):
+            tile = QFrame()
+            tile.setObjectName('dashboardMetric')
+            tile.setFixedHeight(144)
+            tile.setMinimumWidth(0)
+            tile.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+            tile.setToolTip(hint)
+            box = QVBoxLayout(tile)
+            box.setContentsMargins(18, 16, 18, 14)
+            box.setSpacing(6)
+            glyph = QLabel()
+            glyph.setPixmap(app_icon(icon, TOKENS['accent']).pixmap(25, 25))
+            box.addWidget(glyph)
+            box.addStretch()
+            box.addWidget(label(title, 'dashboardMetricTitle'))
+            number = label('0', 'dashboardMetricNumber')
+            number.setWordWrap(False)
+            box.addWidget(number)
+            shadow = QGraphicsDropShadowEffect(tile)
+            shadow.setBlurRadius(20)
+            shadow.setOffset(0, 4)
+            shadow.setColor(QColor(0, 0, 0, 15))
+            tile.setGraphicsEffect(shadow)
+            self.dashboard_metrics[key] = number
+            self.dashboard_metric_cards.append(tile)
+            row.addWidget(tile, 1)
+        stats_layout.addLayout(row)
+        recent = QHBoxLayout()
+        self.dashboard_activity = label('아직 기록된 활동이 없습니다.', 'dashboardRecentActivity')
+        self.dashboard_activity.setWordWrap(False)
+        self.dashboard_activity.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        recent.addWidget(self.dashboard_activity, 1)
         logs = action('전체 로그', lambda: self.nav.setCurrentRow(5), 'logs')
-        logs.setObjectName('dashboardAction')
-        header.addWidget(logs)
-        box.addLayout(header)
-        self.dashboard_activity = label('아직 기록된 활동이 없습니다.')
-        box.addWidget(self.dashboard_activity)
-        self.dashboard_activity_rows = []
-        for _ in range(5):
-            row = QFrame()
-            row.setObjectName('dashboardActivityRow')
-            row_layout = QHBoxLayout(row)
-            row_layout.setContentsMargins(0, 8, 0, 8)
-            row_layout.setSpacing(10)
-            stamp = label('', 'dashboardTime')
-            stamp.setFixedWidth(54)
-            message = label('', 'dashboardActivityText')
-            row_layout.addWidget(stamp, 0, Qt.AlignmentFlag.AlignTop)
-            row_layout.addWidget(message, 1)
-            box.addWidget(row)
-            self.dashboard_activity_rows.append((row, stamp, message))
-        box.setSpacing(0)
-        box.setAlignment(Qt.AlignmentFlag.AlignTop)
-        detail.addWidget(activity, 1, 0)
-        layout.addLayout(detail)
-        layout.addStretch(1)
+        logs.setObjectName('dashboardTextButton')
+        recent.addWidget(logs)
+        stats_layout.addLayout(recent)
+        layout.addWidget(statistics, 0, Qt.AlignmentFlag.AlignHCenter)
         return scroll_page(page)
+
+    def refresh_dashboard_statistics(self, *_):
+        if not hasattr(self, 'dashboard_period'):
+            return
+        totals = self.activity_stats.totals(self.dashboard_period.currentData() or 1)
+        for key, value in self.dashboard_metrics.items():
+            value.setText(f'{totals[key]:,}')
 
     def representative_game(self):
         active = [g for g in self.runtime_games.values() if g.get('running')]
@@ -545,50 +652,50 @@ class ModernWindowMixin:
             if popup.isVisible():
                 popup.refresh()
 
+    def toggle_dashboard_automation(self, _checked=False):
+        self.toggle()
+        self.dashboard_toggle.setChecked(self.enabled)
+
     def refresh_dashboard(self):
         if not getattr(self, 'ui_ready', False):
             return
         self.refresh_tray_status()
-        state = '일시정지' if not self.enabled else '실행 중' if self.connection_verified else '연결 대기'
-        if not self.enabled and self.auto_start_armed and self.config.get('auto_start_change', True):
-            state = '연결 대기'
-        if self.enabled and ('실패' in self.last_runtime_status or '오류' in self.last_runtime_status):
-            state = '오류'
-        self.dashboard_values['automation'][0].setText(state)
-        self.dashboard_values['automation'][1].setText('안전한 자동 선택 · 항상 적용')
-        self.sidebar_auto_state.setText(state)
+        waiting = not self.enabled and self.auto_start_armed and self.config.get('auto_start_change', True)
+        failed = self.enabled and any(word in self.last_runtime_status for word in ('실패', '오류'))
+        state = 'error' if failed else 'waiting' if waiting or self.enabled and not self.connection_verified else 'running' if self.enabled else 'paused'
+        title, description = {
+            'paused': ('자동 변경이 일시정지됐습니다.', '자동 변경을 켜면 게임에 맞춰 방송 카테고리를 변경합니다.'),
+            'waiting': ('치지직 연결을 기다립니다.', '확장프로그램과 방송 계정의 연결 상태를 확인해 주세요.'),
+            'running': ('자동 변경이 실행 중입니다.', '게임을 감지하고 방송 카테고리를 자동으로 연결합니다.'),
+            'error': ('연결 상태를 확인해 주세요.', self.last_runtime_status),
+        }[state]
+        self.dashboard_ring.set_state(state)
+        self.dashboard_title.setText(title)
+        self.dashboard_description.setText(description)
+        self.dashboard_toggle.setChecked(self.enabled)
+        self.sidebar_auto_state.setText({'paused': '일시정지', 'waiting': '연결 대기', 'running': '실행 중', 'error': '오류'}[state])
         set_button_icon(self.toggle_button, 'pause' if self.enabled else 'start', '#FFFFFF')
-        g = self.representative_game()
-        self.dashboard_game_details.setVisible(bool(g))
-        self.dashboard_empty_hint.setVisible(not g)
-        if g:
-            self.dashboard_game.setText(g.get('localized_name') or g.get('game_name') or g.get('process') or '')
-            self.dashboard_process.setText(g.get('process') or '확인 중')
-            self.dashboard_process.setToolTip(g.get('process') or '')
-            self.dashboard_target.setText(g.get('category_name') or '확인 중')
-            self.dashboard_game_meta.setText(g.get('stage', '감지됨'))
-            self.dashboard_method.setText(g.get('detection_source') or 'Discord 게임 목록')
+        game = self.representative_game()
+        if game:
+            name = game.get('localized_name') or game.get('game_name') or game.get('process') or ''
+            self.dashboard_game.setText(name)
+            self.dashboard_game.setToolTip(game.get('process') or '')
+            self.dashboard_game_meta.setText(game.get('stage', '감지됨'))
         else:
-            self.dashboard_game.setText('현재 실행 중인 게임이 없습니다.' if not any(x.get('running') for x in self.runtime_games.values())
+            self.dashboard_game.setText('현재 실행 중인 게임이 없습니다.' if not any(g.get('running') for g in self.runtime_games.values())
                                         else '여러 게임이 실행 중입니다. 대표 게임을 선택해 주세요.')
-            self.dashboard_game_meta.setText('게임 실행을 기다립니다')
-        self.dashboard_values['category'][0].setText((self.last_category or '아직 확인하지 않음') if self.connection_verified else '확인할 수 없음' if self.last_category else '아직 확인하지 않음')
-        self.dashboard_values['category'][1].setText('마지막 적용: ' + (self.last_applied_at or '없음') + (' · 마지막 확인: ' + self.last_category if self.last_category and not self.connection_verified else ''))
+            self.dashboard_game.setToolTip('')
+            self.dashboard_game_meta.clear()
+        category = self.last_category if self.connection_verified else '연결 확인 대기'
+        self.dashboard_category.setText('방송 카테고리 · ' + (category or '아직 확인하지 않음'))
         info = self.bridge.extension_status()
-        self.dashboard_values['extension'][0].setText(info['state'])
-        self.dashboard_values['extension'][1].setText('버전: ' + (info.get('version') or '확인할 수 없음'))
-        for key, (value, meta, dot) in self.dashboard_values.items():
-            success = value.text() in ('실행 중', '정상 연결') or key == 'category' and bool(self.last_category)
-            dot.setPixmap(app_icon('success' if success else 'clock', TOKENS['success'] if success else TOKENS['muted']).pixmap(16, 16))
-        self.dashboard_activity.setVisible(not self.recent_activity)
-        for index, (row, stamp, message) in enumerate(self.dashboard_activity_rows):
-            visible = index < len(self.recent_activity)
-            row.setVisible(visible)
-            if visible:
-                time, _, text = self.recent_activity[index].partition(' — ')
-                stamp.setText(time)
-                message.setText(text)
-                message.setToolTip(text)
+        version = (info.get('browser') or 'Chrome') + ' ' + info['version'] if info.get('version') else '버전 정보 없음'
+        self.dashboard_extension.setText(f"확장프로그램 · {version} · {info['state']}")
+        self.activity_stats.observe(self.runtime_games.values())
+        self.refresh_dashboard_statistics()
+        self.dashboard_activity.setText(self.recent_activity[-1] if self.recent_activity else '아직 기록된 활동이 없습니다.')
+        self.dashboard_activity.setToolTip('\n'.join(self.recent_activity))
+        self.refresh_update_page()
 
     def build_rules(self):
         page = QWidget()
@@ -1139,7 +1246,7 @@ class ModernWindowMixin:
         self.allow_prerelease.setChecked(self.config.get('allow_prerelease', False))
         box.addWidget(setting_row('베타 버전도 확인', '사전 릴리스를 업데이트 확인 대상에 포함합니다.', self.allow_prerelease))
         actions = QHBoxLayout()
-        actions.addWidget(action('지금 확인', self.check_for_updates_manual, 'refresh'))
+        actions.addWidget(action('업데이트 화면 열기', lambda: self.setting_tabs.setCurrentIndex(1), 'refresh'))
         actions.addStretch()
         box.addLayout(actions)
         layout.addStretch()
@@ -1169,8 +1276,12 @@ class ModernWindowMixin:
             self.extension_status_value.setText(info['state'])
             self.extension_status_meta.setText(f"버전: {info.get('version') or '확인할 수 없음'} · {info.get('compatibility', '확인 불가')}\n"
                                                f"브라우저: {info.get('browser') or '확인 불가'} · 마지막 응답: {info.get('last_response') or '없음'}")
-        if hasattr(self, 'update_extension_label'):
-            self.update_extension_label.setText('Chrome 확장  ' + (info.get('version') or '확인할 수 없음'))
+        browser = info.get('browser') or 'Chrome'
+        version = info.get('version')
+        extension_text = f"{browser} 확장 버전: {version} · {info['state']}" if version else f"{browser} 확장 버전: 버전 정보 미수신 · {info['state']}"
+        for name in ('update_extension_label', 'about_extension_label'):
+            if hasattr(self, name):
+                getattr(self, name).setText(extension_text)
         for dot, good in ((self.bridge_status_dot, bool(self.bridge.server)), (self.extension_status_dot, info['state'] == '정상 연결'),
                           (self.account_status_dot, self.connection_verified), (self.automation_status_dot, self.enabled)):
             dot.setPixmap(app_icon('success' if good else 'clock', TOKENS['success'] if good else TOKENS['muted']).pixmap(16, 16))
@@ -1317,6 +1428,8 @@ class ModernWindowMixin:
                 self.connection_verified = True
                 self.last_category = event.get('category_name') or event.get('text', '').split(' → ')[-1]
                 self.last_applied_at = datetime.now().strftime('%H:%M:%S')
+                if event.get('changed', True) and hasattr(self, 'activity_stats'):
+                    self.activity_stats.increment(changed=1)
             self.refresh_dashboard()
 
     def closeEvent(self, event):

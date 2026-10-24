@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (QApplication, QAbstractItemView, QCheckBox, QComb
     QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout, QHeaderView,
     QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem, QMainWindow,
     QPushButton, QSpinBox, QStyle, QSystemTrayIcon, QStackedWidget, QTableWidget,
-    QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget, QFrame, QGraphicsOpacityEffect, QScrollArea, QGridLayout, QSizeGrip, QGraphicsDropShadowEffect)
+    QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget, QFrame, QGraphicsOpacityEffect, QScrollArea, QGridLayout, QSizeGrip, QGraphicsDropShadowEffect, QProgressBar)
 from ui_components import SettingsComboBox as QComboBox, FramelessDialog as QDialog, choose_executable
 from core import Rule, channel_id
 from storage import (data_dir, load_config, save_config, set_windows_autostart,
@@ -38,7 +38,7 @@ def play_pending_alert():
     QApplication.beep()
 
 
-from theme import STYLE, apply_theme as apply_light_theme
+from theme import STYLE, TOKENS, apply_theme as apply_light_theme
 from app_icons import app_icon, set_button_icon
 
 def _resource_path(name):
@@ -101,6 +101,7 @@ class CustomTitleBar(QFrame):
         layout.setSpacing(8)
 
         app_icon = QLabel()
+        app_icon.setObjectName('titleBarLogo')
         app_icon.setPixmap(icon().pixmap(20, 20))
         app_icon.setFixedSize(22, 22)
         layout.addWidget(app_icon)
@@ -749,6 +750,9 @@ class ExistingWindow(QMainWindow):
         self.update_check_worker = None
         self.update_window = None
         self.pending_update_release = None
+        self.available_update_release = None
+        self.update_check_state = 'idle'
+        self.update_check_error = ''
         self.manual_update_check = False
         self.last_update_notified_version = ''
         self.connection_check_pending = False
@@ -876,6 +880,7 @@ class ExistingWindow(QMainWindow):
         sidebar_layout.addWidget(auto_card)
 
         tray_button = button('트레이로 숨기기', self.close)
+        tray_button.setObjectName('sidebarTrayButton')
         sidebar_layout.addWidget(tray_button)
         body_layout.addWidget(sidebar, 0)
 
@@ -1167,48 +1172,54 @@ class ExistingWindow(QMainWindow):
     def build_update_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 4, 0, 0)
-        layout.setSpacing(12)
-
-        card = QFrame()
-        card.setObjectName('panelCard')
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(18, 17, 18, 18)
-        card_layout.setSpacing(9)
-        title = QLabel('버전 및 업데이트')
-        title.setObjectName('sectionTitle')
-        card_layout.addWidget(title)
-        self.update_current_label = QLabel(f'Windows 앱  {APP_VERSION}')
-        self.update_current_label.setObjectName('statusCardValue')
-        card_layout.addWidget(self.update_current_label)
-        self.update_extension_label = QLabel('Chrome 확장  확인할 수 없음')
-        self.update_extension_label.setObjectName('softHint')
-        card_layout.addWidget(self.update_extension_label)
-        self.update_page_status = QLabel('GitHub Releases를 주기적으로 확인합니다.')
-        self.update_page_status.setObjectName('inlineStatus')
+        layout.setContentsMargins(0, 22, 0, 0)
+        layout.setSpacing(22)
+        self.update_current_label = QLabel(f'Windows 앱 {APP_VERSION}')
+        self.update_current_label.setObjectName('updateInstalledVersion')
+        layout.addWidget(self.update_current_label)
+        overview = QHBoxLayout()
+        overview.setSpacing(22)
+        self.update_status_icon = QLabel()
+        self.update_status_icon.setFixedSize(72, 72)
+        self.update_status_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.update_status_icon.setObjectName('updateStatusIcon')
+        overview.addWidget(self.update_status_icon, 0, Qt.AlignmentFlag.AlignTop)
+        content = QVBoxLayout()
+        content.setSpacing(8)
+        self.update_page_status = QLabel()
+        self.update_page_status.setObjectName('updateStateTitle')
         self.update_page_status.setWordWrap(True)
-        card_layout.addWidget(self.update_page_status)
+        content.addWidget(self.update_page_status)
+        self.update_page_detail = QLabel()
+        self.update_page_detail.setObjectName('softHint')
+        self.update_page_detail.setWordWrap(True)
+        self.update_page_detail.setTextFormat(Qt.TextFormat.PlainText)
+        content.addWidget(self.update_page_detail)
+        self.update_last_checked = QLabel()
+        self.update_last_checked.setObjectName('softHint')
+        content.addWidget(self.update_last_checked)
+        self.update_schedule_label = QLabel()
+        self.update_schedule_label.setObjectName('softHint')
+        content.addWidget(self.update_schedule_label)
+        overview.addLayout(content, 1)
+        layout.addLayout(overview)
+        self.update_check_progress = QProgressBar()
+        self.update_check_progress.setRange(0, 0)
+        self.update_check_progress.setTextVisible(False)
+        self.update_check_progress.setFixedHeight(4)
+        self.update_check_progress.hide()
+        layout.addWidget(self.update_check_progress)
         actions = QHBoxLayout()
-        actions.addWidget(button('지금 업데이트 확인', self.check_for_updates_manual, True))
-        self.install_update_button = button('대기 중인 업데이트 설치', self.open_pending_update)
+        self.update_check_button = button('업데이트 확인', self.check_for_updates_manual)
+        actions.addWidget(self.update_check_button)
+        self.install_update_button = button('새 버전 설치', self.open_pending_update, True)
         actions.addWidget(self.install_update_button)
-        actions.addStretch(1)
-        card_layout.addLayout(actions)
-        layout.addWidget(card)
-
-        info = QFrame()
-        info.setObjectName('panelCard')
-        info_layout = QVBoxLayout(info)
-        info_layout.setContentsMargins(18, 15, 18, 15)
-        info_layout.setSpacing(5)
-        ititle = QLabel('버전 정책')
-        ititle.setObjectName('sectionTitle')
-        info_layout.addWidget(ititle)
-        text = QLabel('Major: 호환성이 깨지는 대규모 개편 · Minor: 호환성을 유지하는 새 기능 · Patch: 버그/안정성/보안 수정')
-        text.setObjectName('softHint')
-        text.setWordWrap(True)
-        info_layout.addWidget(text)
-        layout.addWidget(info)
+        actions.addStretch()
+        layout.addLayout(actions)
+        self.update_extension_label = QLabel('Chrome 확장 버전: 연결 대기')
+        self.update_extension_label.setObjectName('softHint')
+        self.update_extension_label.setWordWrap(True)
+        layout.addWidget(self.update_extension_label)
         layout.addStretch(1)
         self.pages.addWidget(page)
         self.refresh_update_page()
@@ -1216,29 +1227,26 @@ class ExistingWindow(QMainWindow):
     def build_about_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 4, 0, 0)
-        layout.setSpacing(12)
-
-        card = QFrame()
-        card.setObjectName('panelCard')
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(18, 18, 18, 18)
-        card_layout.setSpacing(8)
+        layout.setContentsMargins(0, 22, 0, 0)
+        layout.setSpacing(16)
         title = QLabel('CHZZK Auto Category')
         title.setObjectName('statusCardValue')
-        card_layout.addWidget(title)
-        detail = QLabel(
-            f'Windows 앱 버전: {APP_VERSION}\n'
-            'Chrome 확장 버전: 연결 후 확인\n'
-            '설치 경로: C:\\Program Files\\CHZZK Auto Category\n'
-            '설정 경로: %LOCALAPPDATA%\\ChzzkAutoCategory\n\n'
-            '실행 중인 게임을 감지해 치지직 방송 카테고리를 자동으로 연결하는 로컬 데스크톱 앱입니다.'
-        )
-        detail.setObjectName('softHint')
-        detail.setWordWrap(True)
-        card_layout.addWidget(detail)
-        layout.addWidget(card)
-        layout.addStretch(1)
+        layout.addWidget(title)
+        description = QLabel('실행 중인 게임에 맞춰 치지직 방송 카테고리를 자동으로 연결합니다.')
+        description.setObjectName('softHint')
+        description.setWordWrap(True)
+        layout.addWidget(description)
+        self.about_app_version = QLabel(f'Windows 앱 버전: {APP_VERSION}')
+        self.about_extension_label = QLabel('Chrome 확장 버전: 연결 대기')
+        location = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
+        self.about_install_label = QLabel('설치 위치: ' + str(location))
+        self.about_data_label = QLabel('설정 위치: ' + str(data_dir()))
+        for note in (self.about_app_version, self.about_extension_label, self.about_install_label, self.about_data_label):
+            note.setObjectName('aboutDetail')
+            note.setWordWrap(True)
+            note.setTextFormat(Qt.TextFormat.PlainText)
+            layout.addWidget(note)
+        layout.addStretch()
         self.pages.addWidget(page)
 
     def refresh_pending_page(self):
@@ -1290,15 +1298,44 @@ class ExistingWindow(QMainWindow):
     def refresh_update_page(self):
         if not hasattr(self, 'update_page_status'):
             return
-        if isinstance(self.pending_update_release, dict):
-            version = str(self.pending_update_release.get('version') or '?')
-            self.update_page_status.setText(f'새 버전 {version}을 설치할 수 있습니다.')
-            self.install_update_button.setEnabled(True)
-            self.install_update_button.setText(f'{version} 업데이트 설치')
-        else:
-            self.update_page_status.setText(f'현재 앱 버전 {APP_VERSION} · GitHub Releases를 설정한 주기로 확인합니다.')
-            self.install_update_button.setEnabled(False)
-            self.install_update_button.setText('대기 중인 업데이트 없음')
+        state = self.update_check_state
+        release = self.pending_update_release or self.available_update_release
+        checking = state == 'checking'
+        available = isinstance(release, dict)
+        title, detail, icon = {
+            'idle': ('새 버전을 확인해 주세요.', '설치된 버전과 새 릴리스의 업데이트 여부를 확인합니다.', 'refresh'),
+            'checking': ('업데이트를 확인하고 있습니다.', '새 버전과 설치 파일을 확인하고 있습니다.', 'refresh'),
+            'current': ('최신 버전을 사용 중입니다.', f'Windows 앱 {APP_VERSION}을 사용하고 있습니다.', 'success'),
+            'available': ('새 업데이트가 있습니다.', '변경 내용을 확인하고 새 버전을 설치할 수 있습니다.', 'download'),
+            'error': ('업데이트를 확인하지 못했습니다.', self.update_check_error, 'warning'),
+            'unsupported': ('설치된 Windows 앱에서 확인해 주세요.', 'MSI로 설치한 프로그램에서 자동 업데이트를 사용할 수 있습니다.', 'info'),
+        }.get(state, ('새 버전을 확인해 주세요.', '', 'refresh'))
+        if available and state not in ('checking', 'error'):
+            title = f"새 버전 {release.get('version') or '?'}을 설치할 수 있습니다."
+            detail, icon = '변경 내용을 확인한 뒤 업데이트를 진행해 주세요.', 'download'
+        self.update_page_status.setText(title)
+        self.update_page_detail.setText(detail)
+        self.update_status_icon.setPixmap(app_icon(icon, TOKENS['accent'] if state != 'error' else TOKENS['error']).pixmap(36, 36))
+        self.update_check_progress.setVisible(checking)
+        self.update_check_button.setEnabled(not checking)
+        self.update_check_button.setText('확인 중…' if checking else '다시 확인' if state == 'error' else '업데이트 확인')
+        self.install_update_button.setVisible(available)
+        self.install_update_button.setEnabled(available and not checking)
+        if available:
+            self.install_update_button.setText(f"{release.get('version') or '?'} 업데이트 설치")
+        try:
+            checked = float(self.config.get('update_last_checked_at') or 0)
+            checked_text = datetime.fromtimestamp(checked).strftime('%m.%d %H:%M') if checked > 0 else '아직 확인하지 않음'
+        except (ValueError, TypeError, OverflowError, OSError):
+            checked_text = '아직 확인하지 않음'
+        self.update_last_checked.setText('마지막 확인 요청 · ' + checked_text)
+        minutes = int(self.config.get('update_check_minutes', 180))
+        self.update_schedule_label.setText(f'자동 확인 · {minutes / 60:g}시간마다' if self.config.get('auto_update', True) else '자동 확인 꺼짐 · 직접 확인할 수 있습니다.')
+        if hasattr(self, 'dashboard_update_button'):
+            self.dashboard_update_button.setEnabled(not checking)
+            self.dashboard_update_button.setText('확인 중…' if checking else '업데이트 설치' if available else '업데이트 확인')
+            self.dashboard_update_status.setText(title)
+            self.dashboard_update_status.setVisible(state != 'idle' or available)
 
 
     def build_tray(self):
@@ -1658,7 +1695,7 @@ class ExistingWindow(QMainWindow):
                 timer.start()
 
     def open_pending_update(self):
-        release = self.pending_update_release
+        release = self.pending_update_release or self.available_update_release
         if not release:
             self.check_for_updates_manual()
             return
@@ -1681,8 +1718,9 @@ class ExistingWindow(QMainWindow):
             return
         if sys.platform != 'win32' or not getattr(sys, 'frozen', False):
             if self.manual_update_check:
-                show_info(self, '업데이트 확인', '자동 업데이트는 Windows에 설치된 빌드에서 동작합니다.')
+                self.update_check_state = 'unsupported'
                 self.manual_update_check = False
+                self.refresh_update_page()
             return
 
         from scheduling import seconds_until_check
@@ -1693,6 +1731,9 @@ class ExistingWindow(QMainWindow):
         self.config['update_last_checked_at'] = time.time()
         save_config(self.config)
         self.refresh_update_timer_interval()
+        self.update_check_state = 'checking'
+        self.update_check_error = ''
+        self.refresh_update_page()
         worker = UpdateCheckWorker(self, allow_prerelease=self.config.get('allow_prerelease', False))
         self.update_check_worker = worker
         worker.completed.connect(self.on_update_check_completed)
@@ -1703,12 +1744,14 @@ class ExistingWindow(QMainWindow):
     def on_update_check_completed(self, release):
         manual = self.manual_update_check
         self.manual_update_check = False
+        self.available_update_release = release
+        self.update_check_state = 'available' if release else 'current'
+        self.update_check_error = ''
         if not release:
-            if hasattr(self, 'update_page_status'):
-                self.update_page_status.setText(f'현재 최신 버전을 사용 중입니다. · {APP_VERSION}')
+            self.pending_update_release = None
+            if getattr(self, 'update_action', None):
+                self.update_action.setVisible(False)
             self.refresh_update_page()
-            if manual:
-                show_info(self, '업데이트 확인', f'현재 최신 버전을 사용 중입니다.\n버전 {APP_VERSION}')
             return
 
         version = str(release.get('version') or '?')
@@ -1753,15 +1796,14 @@ class ExistingWindow(QMainWindow):
 
     def clear_update_check_worker(self):
         self.update_check_worker = None
+        self.refresh_update_page()
 
     def on_update_check_failed(self, error):
-        manual = self.manual_update_check
         self.manual_update_check = False
+        self.update_check_state = 'error'
+        self.update_check_error = str(error)
         self.append_log('업데이트 확인 실패: ' + str(error))
-        if hasattr(self, 'update_page_status'):
-            self.update_page_status.setText('업데이트 확인 실패 · ' + str(error))
-        if manual:
-            show_warning(self, '업데이트 확인 실패', str(error))
+        self.refresh_update_page()
 
     def toggle(self):
         self.auto_start_armed = False

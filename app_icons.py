@@ -4,14 +4,14 @@ import qtawesome as qta
 from PySide6.QtCore import QSize
 
 ICONS = {
-    'dashboard': 'gauge-high', 'games': 'gamepad', 'automation': 'sliders',
+    'dashboard': 'shield-halved', 'games': 'gamepad', 'automation': 'sliders',
     'connections': 'link', 'settings': 'gear', 'logs': 'list', 'start': 'play',
     'pause': 'pause', 'add': 'plus', 'edit': 'pen', 'delete': 'trash',
     'search': 'magnifying-glass', 'refresh': 'rotate', 'info': 'circle-info',
     'success': 'check', 'warning': 'triangle-exclamation', 'close': 'xmark',
     'minimize': 'minus', 'maximize': 'window-maximize', 'up': 'arrow-up',
     'down': 'arrow-down', 'download': 'download', 'details': 'eye',
-    'notify': 'bell', 'tray': 'desktop', 'clock': 'clock', 'exclude': 'ban',
+    'notify': 'bell', 'tray': 'desktop', 'clock': 'clock', 'exclude': 'ban', 'calendar': 'calendar-days', 'help': 'circle-question',
 }
 
 

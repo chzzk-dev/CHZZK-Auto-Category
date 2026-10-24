@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, Qt, Property, QRectF, QSize
+from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, Qt, Property, QRectF, QSize, QRect
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QApplication,
@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QVBoxLayout,
+    QWidget,
 )
 
 from theme import TOKENS
@@ -28,6 +29,37 @@ TEXT = TOKENS['text']
 MUTED = TOKENS['muted']
 WARNING = TOKENS['warning']
 DANGER = TOKENS['error']
+
+
+class StatusRing(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(184, 184)
+        self.state = 'paused'
+        self.setAccessibleName('자동 변경 일시정지')
+
+    def set_state(self, state):
+        if self.state != state:
+            self.state = state
+            self.update()
+        self.setAccessibleName({'running': '자동 변경 실행 중', 'paused': '자동 변경 일시정지',
+                                'waiting': '연결 대기', 'error': '연결 오류'}[state])
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        color = ACCENT if self.state == 'running' else DANGER if self.state == 'error' else '#B7BDC7'
+        for width, alpha in ((24, 4), (18, 6)):
+            halo = QColor(color)
+            halo.setAlpha(alpha)
+            painter.setPen(QPen(halo, width))
+            painter.drawEllipse(QRectF(14, 14, 156, 156))
+        painter.setPen(QPen(QColor('#F0F2F7'), 6))
+        painter.drawEllipse(QRectF(25, 25, 134, 134))
+        painter.setPen(QPen(QColor(color), 12))
+        painter.drawEllipse(QRectF(14, 14, 156, 156))
+        name = {'running': 'success', 'paused': 'pause', 'waiting': 'clock', 'error': 'warning'}[self.state]
+        app_icon(name, color).paint(painter, QRect(70, 70, 44, 44))
 
 _DIALOG_STYLE = f'''
 QDialog {{ background: transparent; }}

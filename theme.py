@@ -667,6 +667,25 @@ QCheckBox { color: @text; spacing: 8px; }
 QCheckBox::indicator { width: 14px; height: 14px; border: 1px solid #CDD1D8; border-radius: 3px; background: white; }
 QCheckBox::indicator:checked { background: @accent; border-color: @accent; }
 QPushButton#mandatoryBadge { background: @accent_soft; color: @accent; border: none; }
+QFrame#dashboardHero { background: white; border: none; }
+QLabel#dashboardHeadline { color: #53565C; font-size: 28px; font-weight: 700; }
+QLabel#dashboardDescription { color: #989CA4; font-size: 14px; }
+QLabel#dashboardControlLabel { color: #737780; font-size: 12px; font-weight: 600; }
+QLabel#dashboardGameName { color: #686D76; font-size: 12px; font-weight: 600; }
+QLabel#dashboardConnectionText, QLabel#dashboardRecentActivity { color: #989CA4; font-size: 11px; }
+QLabel#dashboardSectionTitle { color: #989CA4; font-size: 12px; }
+QFrame#dashboardMetric { background: white; border: 1px solid #F5F5F7; border-radius: 14px; }
+QLabel#dashboardMetricTitle { color: #989CA4; font-size: 12px; }
+QLabel#dashboardMetricNumber { color: #25272C; font-family: "Segoe UI", "Malgun Gothic", "Noto Sans CJK KR"; font-size: 23px; font-weight: 500; }
+QToolButton#dashboardCalendar { background: transparent; border: none; padding: 4px; }
+QComboBox#dashboardPeriod { background: transparent; border: none; min-width: 100px; font-size: 12px; padding: 5px 24px 5px 6px; color: #858A93; }
+QPushButton#dashboardTextButton { background: transparent; border: none; border-radius: 4px; padding: 5px 8px; color: #858A93; font-size: 12px; }
+QPushButton#dashboardTextButton:hover { color: @accent; background: #FFF6F5; }
+QPushButton#dashboardTextButton:disabled { color: #B7BDC7; }
+QLabel#updateInstalledVersion { color: #858A93; font-size: 13px; }
+QLabel#updateStateTitle { color: #3F434B; font-size: 23px; font-weight: 600; }
+QLabel#updateStatusIcon { background: #FFF3F1; border-radius: 36px; }
+QLabel#aboutDetail { color: #7D8390; font-size: 13px; }
 """
 
 
