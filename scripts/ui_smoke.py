@@ -10,7 +10,7 @@ sys.path.insert(0, str(ROOT))
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton
 from PySide6.QtGui import QFontDatabase
-from PySide6.QtCore import QByteArray, QBuffer, QIODevice
+from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QPoint
 from main import Window, apply_light_theme
 from storage import normalize_config
 from app_icons import validate_icons
@@ -107,6 +107,91 @@ def render_game_list_states(window, app, destination, width):
         window.refresh_table()
 
 
+def render_dashboard_states(window, app, destination, width):
+    from datetime import date, timedelta
+    from unittest.mock import patch
+    from activity_stats import ActivityStats
+    fields = ('enabled', 'connection_verified', 'auto_start_armed', 'runtime_games',
+              'last_category', 'last_runtime_status', 'activity_stats')
+    original = {name: getattr(window, name) for name in fields}
+    auto_start = window.config.get('auto_start_change')
+    # Demonstration fixtures exercise real widgets, signals and daily aggregation.
+    version = json.loads((ROOT / 'extension/manifest.json').read_text())['version']
+    extension = {'state': '정상 연결', 'version': version, 'browser': 'Chrome', 'compatibility': '정상'}
+    try:
+        window.config['auto_start_change'] = True
+        window.runtime_games = {'mc': {'key': 'mc', 'process': 'Minecraft.exe', 'game_name': 'Minecraft',
+            'localized_name': '마인크래프트', 'category_id': 'minecraft', 'category_name': '마인크래프트',
+            'stage': '연결 완료', 'running': True, 'representative': True}}
+        window.activity_stats = ActivityStats()
+        window.activity_stats.observe(window.runtime_games.values())
+        today = date.today()
+        window.activity_stats.days = {today.isoformat(): {'detected': 8, 'matched': 7, 'changed': 6, 'pending': 1},
+            (today - timedelta(days=6)).isoformat(): {'detected': 16, 'matched': 14, 'changed': 11, 'pending': 2},
+            (today - timedelta(days=20)).isoformat(): {'detected': 24, 'matched': 23, 'changed': 20, 'pending': 1}}
+        window.last_category = '마인크래프트'
+        window.nav.setCurrentRow(0)
+        with patch.object(window.bridge, 'extension_status', return_value=extension):
+            for state, enabled, connected, armed in (('paused', False, False, False),
+                    ('waiting', False, False, True), ('running', True, True, False), ('error', True, True, False)):
+                window.enabled, window.connection_verified, window.auto_start_armed = enabled, connected, armed
+                window.last_runtime_status = '카테고리 변경 실패 · 연결을 확인해 주세요.' if state == 'error' else '게임 감지 중'
+                window.refresh_connection_page()
+                window.dashboard_toggle._animation.setCurrentTime(140)
+                app.processEvents()
+                assert window.dashboard_ring.state == state
+                assert not window.navigation_sidebar.isVisible()
+                assert window.dashboard.horizontalScrollBar().maximum() == 0
+                assert window.dashboard.verticalScrollBar().maximum() == 0
+                assert window.dashboard_metrics['detected'].text() == '8'
+                assert save_preview(window, destination / f'dashboard-{state}-{width}.png')
+            window.enabled, window.connection_verified, window.auto_start_armed = True, True, False
+            window.last_runtime_status = '게임 감지 중'
+            window.refresh_dashboard()
+            window.dashboard_period.setCurrentIndex(2)
+            app.processEvents()
+            assert window.dashboard_metrics['detected'].text() == '48'
+            assert save_preview(window, destination / f'dashboard-period-30-{width}.png')
+            window.dashboard_period.setCurrentIndex(0)
+    finally:
+        for name, value in original.items():
+            setattr(window, name, value)
+        window.config['auto_start_change'] = auto_start
+        window.refresh_connection_page()
+
+
+def render_update_page_states(window, app, destination):
+    import time
+    from unittest.mock import patch
+    original = (window.update_check_state, window.update_check_error, window.available_update_release)
+    checked_at = window.config.get('update_last_checked_at')
+    try:
+        window.resize(1360, 860)
+        window.config['update_last_checked_at'] = time.time()
+        window.nav.setCurrentRow(4)
+        window.setting_tabs.setCurrentIndex(1)
+        version = json.loads((ROOT / 'extension/manifest.json').read_text())['version']
+        with patch.object(window.bridge, 'extension_status', return_value={
+                'state': '정상 연결', 'version': version, 'browser': 'Chrome', 'compatibility': '정상'}):
+            window.refresh_connection_page()
+            for state in ('current', 'checking', 'available', 'error'):
+                window.update_check_state = state
+                window.update_check_error = '업데이트 서버에 연결하지 못했습니다. 잠시 후 다시 확인해 주세요.'
+                window.available_update_release = {'version': '4.12.15'} if state == 'available' else None
+                window.refresh_update_page()
+                app.processEvents()
+                assert window.update_check_button.isEnabled() == (state != 'checking')
+                assert save_preview(window, destination / f'update-page-{state}.png')
+            window.setting_tabs.setCurrentIndex(2)
+            app.processEvents()
+            assert version in window.about_extension_label.text()
+            assert save_preview(window, destination / 'about-connected.png')
+    finally:
+        window.update_check_state, window.update_check_error, window.available_update_release = original
+        window.config['update_last_checked_at'] = checked_at
+        window.refresh_update_page()
+
+
 def main():
     app = QApplication([])
     font = os.environ.get('CHZZK_UI_TEST_FONT')
@@ -137,13 +222,17 @@ def main():
                 app.processEvents()
                 page = w.pages.currentWidget()
                 assert page.width() > 0 and page.height() > 0
-                assert w.page_title.geometry().intersects(w.toggle_button.geometry()) is False
                 if i == 0:
-                    cards = w.dashboard_summary_cards
+                    cards = w.dashboard_metric_cards
+                    assert len(cards) == 4
                     assert max(c.width() for c in cards) - min(c.width() for c in cards) <= 1
-                    assert w.dashboard_game_card.height() < 220
-                    assert w.dashboard_activity_card.y() > w.dashboard_game_card.geometry().bottom()
+                    assert not w.navigation_sidebar.isVisible() and not w.page_title.isVisible()
+                    assert cards[0].mapTo(w.dashboard.viewport(), QPoint()).y() > w.dashboard_hero.mapTo(w.dashboard.viewport(), QPoint()).y() + w.dashboard_hero.height()
+                    assert w.dashboard.verticalScrollBar().maximum() == 0
                     assert w.dashboard.horizontalScrollBar().maximum() == 0
+                else:
+                    assert w.navigation_sidebar.isVisible()
+                    assert w.page_title.geometry().intersects(w.toggle_button.geometry()) is False
                 if i == 5:
                     assert '시간' in w.log.toPlainText() and '스마일모' in w.log.toPlainText()
                     assert '분석 중' not in w.log.toPlainText()
@@ -152,6 +241,7 @@ def main():
                 assert save_preview(w, destination / f'page-{i}-{width}.png')
                 checks.append({'page': i, 'width': width, 'height': height, 'title': w.page_title.text()})
             render_game_list_states(w, app, destination, width)
+            render_dashboard_states(w, app, destination, width)
             w.nav.setCurrentRow(3)
             w.connection_tabs.setCurrentIndex(2)
             app.processEvents()
@@ -161,6 +251,7 @@ def main():
         app.processEvents()
         assert save_preview(w.tray_popup, destination / 'tray.png')
         w.tray_popup.hide()
+        render_update_page_states(w, app, destination)
         w.hide()
         w.show_main()
         app.processEvents()
@@ -174,6 +265,8 @@ def main():
     print(f'Qt scale {os.environ.get("QT_SCALE_FACTOR", "1")}: 18 page/size renders, dashboard alignment, icons, popup and restore passed')
     print('Update prompt, download, completion and error previews passed without starting the installer')
     print('Empty, populated and filtered game lists retained their table/header/footer geometry at all three sizes')
+    print('Four dashboard states, all four counters and 30-day selection passed at three window sizes')
+    print('Inline update current, checking, available and error states passed')
 
 
 if __name__ == '__main__':

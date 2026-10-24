@@ -257,7 +257,7 @@ class ModernUiTests(unittest.TestCase):
         self.assertIn('검색 중', w.dashboard_game_meta.text())
         w.on_event({'kind': 'detected_games', 'data': []})
         self.assertEqual(w.dashboard_game.text(), '현재 실행 중인 게임이 없습니다.')
-        self.assertEqual(w.dashboard_values['extension'][1].text(), '버전: 확인할 수 없음')
+        self.assertIn('버전 정보 없음', w.dashboard_extension.text())
 
     def test_mandatory_matching_and_hour_settings_persist(self):
         w = self.window
@@ -282,7 +282,7 @@ class ModernUiTests(unittest.TestCase):
             w.append_log(f'[게임 감지] Game{i}.exe')
         self.assertEqual(len(w.recent_activity), 5)
         self.assertNotIn('Game0.exe', w.dashboard_activity.text())
-        messages = [message.text() for row, stamp, message in w.dashboard_activity_rows]
+        messages = w.dashboard_activity.toolTip().splitlines()
         self.assertEqual(len(messages), 5)
         self.assertIn('Game5.exe', messages[0])
         self.assertIn('Game9.exe', messages[-1])
@@ -294,7 +294,7 @@ class ModernUiTests(unittest.TestCase):
         self.assertNotIn('Game', w.log.toPlainText())
 
     def test_dashboard_compact_rows_align_at_minimum_and_default_sizes(self):
-        from PySide6.QtWidgets import QPushButton
+        from PySide6.QtCore import QPoint
         w = self.window
         for i in range(5):
             w.append_log(f'[게임 감지] Game{i}.exe')
@@ -310,21 +310,20 @@ class ModernUiTests(unittest.TestCase):
                 else:
                     w.on_event({'kind': 'detected_games', 'data': []})
                 self.app.processEvents()
-                cards = w.dashboard_summary_cards
+                cards = w.dashboard_metric_cards
+                self.assertEqual(len(cards), 4)
                 self.assertLessEqual(max(c.width() for c in cards) - min(c.width() for c in cards), 1)
                 self.assertEqual(len({c.y() for c in cards}), 1)
-                hero, activity = w.dashboard_game_card, w.dashboard_activity_card
-                self.assertGreater(hero.y(), max(c.geometry().bottom() for c in cards))
-                self.assertGreater(activity.y(), hero.geometry().bottom())
-                self.assertEqual(hero.width(), activity.width())
-                self.assertEqual(hero.x(), activity.x())
-                self.assertLess(hero.height(), 280 if running else 220)
+                hero = w.dashboard_hero
+                self.assertGreater(cards[0].mapTo(w.dashboard.viewport(), QPoint()).y(),
+                                   hero.mapTo(w.dashboard.viewport(), QPoint()).y() + hero.height())
+                self.assertFalse(w.navigation_sidebar.isVisible())
+                self.assertFalse(w.page_title.isVisible())
                 self.assertEqual(w.dashboard.verticalScrollBar().maximum(), 0)
                 self.assertEqual(w.dashboard.horizontalScrollBar().maximum(), 0)
-                for panel in (hero, activity):
-                    for button in panel.findChildren(QPushButton):
-                        self.assertTrue(panel.rect().contains(button.geometry()))
-                        self.assertLess(button.width(), panel.width() // 3)
+                self.assertTrue(w.dashboard_ring.isVisible())
+                self.assertTrue(w.dashboard_toggle.isVisible())
+                self.assertTrue(w.dashboard_period.isVisible())
         w.hide()
 
     def test_tray_navigation_restoration_maps_old_shortcuts(self):
