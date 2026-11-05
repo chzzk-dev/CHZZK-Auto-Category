@@ -50,7 +50,7 @@ DEFAULT_CONFIG = {
     'excluded_processes': [],
     'preferred_process': '',
     'only_when_live': False,
-    'league_mode': 'ask',
+    'league_mode': 'auto',
     'close_to_tray': True,
     'minimize_to_tray': True,
     'detailed_logs': True,
@@ -97,7 +97,7 @@ def normalize_config(value):
     config['bridge_port'] = max(1024, min(65535, int(config.get('bridge_port', 5000))))
     config['extension_id'] = str(config.get('extension_id') or WEBSTORE_EXTENSION_ID).strip().lower()
     config['chzzk_open_enabled'] = True
-    config['league_mode'] = 'ask'
+    config['league_mode'] = 'auto'
     config.pop('chzzk_client_id', None)
     config.pop('chzzk_client_secret', None)
     config.pop('steam_api_key', None)
@@ -106,6 +106,12 @@ def normalize_config(value):
     for key in ('rules', 'auto_rules', 'auto_pending'):
         if not isinstance(config.get(key), list):
             config[key] = []
+    from autodetect import migrate_riot_rules, riot_game_for_process
+    for key in ('rules', 'auto_rules'):
+        config[key] = migrate_riot_rules(config[key])
+    config['auto_pending'] = [p for p in config['auto_pending']
+                              if not (isinstance(p, dict) and p.get('reason') == 'multi-game'
+                                      and riot_game_for_process(p.get('process', '')))]
     return config
 
 

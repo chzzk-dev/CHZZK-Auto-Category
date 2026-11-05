@@ -213,11 +213,7 @@ class ModernWindowMixin:
         self.ui_ready = False
         self.runtime_games = {}
         self.game_log_running = {}
-        self.quick_rule_callbacks = {}
         self.official_check_requested = False
-        self.league_session_token = None
-        self.active_league_dialog = None
-        self.league_selected_session = None
         self.recent_activity = deque(maxlen=5)
         self.last_category = None
         self.connection_retry_at = 0
@@ -872,11 +868,6 @@ class ModernWindowMixin:
         self.rule_move_up_button.setEnabled(bool(manual and row['index'] > 0))
         self.rule_move_down_button.setEnabled(bool(manual and row['index'] < len(self.rules) - 1))
 
-    def confirm_league_selection(self, rule):
-        if self.league_session_token and rule and any(p.casefold() in ('leagueclient.exe', 'league of legends.exe') for p in rule.processes):
-            self.league_selected_session = self.league_session_token
-            self.worker.submit('confirm_league_mode', {'session': self.league_session_token, 'rule': asdict(rule)})
-
     def edit_rule(self, _checked=False, new=False):
         if new:
             result = super().edit_rule(new=True)
@@ -889,8 +880,6 @@ class ModernWindowMixin:
             if row['kind'] == 'auto':
                 self.convert_rule('manual')
             result = super().edit_rule()
-        if isinstance(result, Rule):
-            self.confirm_league_selection(result)
         return result
 
     def resolve_pending(self):
@@ -917,8 +906,6 @@ class ModernWindowMixin:
             self.auto_pending = [x for x in self.auto_pending if str(x.get('process', '')).casefold() not in occupied]
             if not self.persist():
                 self.rules, self.auto_rules, self.auto_pending = before
-            else:
-                self.confirm_league_selection(dlg.result_rule)
             self.refresh_table()
         dlg.deleteLater()
 
@@ -938,105 +925,37 @@ class ModernWindowMixin:
         self.refresh_table()
         self.select_rule_location(kind, len(target) - 1)
 
-    def prompt_league_mode(self, event):
-        if self.league_session_token != event['session'] or self.league_selected_session == event['session']:
-            return
-        if self.active_league_dialog is not None:
-            return
-        if QApplication.activeModalWidget() is not None:
-            QTimer.singleShot(250, lambda: self.prompt_league_mode(event))
-            return
-        self.show_game_details(prompt_event=event)
-
-    def show_game_details(self, *_, prompt_event=None):
+    def show_game_details(self, *_):
         row = self.selected_game()
-        if prompt_event:
-            row = next((r for r in self.game_model.rows if r['process'].casefold() in ('leagueclient.exe', 'league of legends.exe')), None)
-            if row is None:
-                row = {'game': '롤 / 롤토체스', 'process': prompt_event['process'], 'category': '선택 전',
-                       'kind': 'runtime', 'running': True}
         if not row:
             return
         dlg = QDialog(self)
-        dlg.setWindowTitle('어떤 게임을 할까요?' if prompt_event else row['game'] + ' · 간편 설정')
-        if prompt_event:
-            self.active_league_dialog = dlg
-            dlg.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
+        dlg.setWindowTitle(row['game'] + ' · 간편 설정')
         dlg.resize(560, 380)
         layout = QVBoxLayout(dlg)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(14)
-        summary, summary_box = card('어떤 게임을 할까요?' if prompt_event else row['game'])
-        if not prompt_event:
-            summary_box.addWidget(label('방송 카테고리: ' + row['category'], 'statusCardValue'))
-        summary_box.addWidget(label('이번에 플레이할 게임을 선택하면 방송 카테고리를 연결합니다.' if prompt_event else '선택한 게임에 맞춰 방송 카테고리를 자동 변경합니다.'))
+        summary, summary_box = card(row['game'])
+        summary_box.addWidget(label('방송 카테고리: ' + row['category'], 'statusCardValue'))
+        from autodetect import riot_game_for_process
+        hint = ('실행 파일을 기준으로 롤과 롤체를 자동으로 구분합니다.'
+                if riot_game_for_process(row['process'])
+                else '선택한 게임에 맞춰 방송 카테고리를 자동 변경합니다.')
+        summary_box.addWidget(label(hint))
         layout.addWidget(summary)
-        quick_message = label('')
-        quick_message.setObjectName('quickMessage')
-        layout.addWidget(quick_message)
-        quick_tokens = []
-        quick_buttons = []
 
-        def choose_mode(canonical):
-            import uuid
-            token = uuid.uuid4().hex
-            session = prompt_event['session'] if prompt_event else self.league_session_token
-            quick_tokens.append(token)
-            quick_message.setText('카테고리를 확인하고 있습니다…')
-            for button in quick_buttons:
-                button.setEnabled(False)
-
-            def complete(event):
-                for button in quick_buttons:
-                    button.setEnabled(True)
-                if event['kind'] == 'quick_rule_error':
-                    quick_message.setText(event['text'])
-                    return
-                if session and session != self.league_session_token:
-                    quick_message.setText('게임 실행이 종료되었습니다. 다시 실행한 뒤 선택해 주세요.')
-                    return
-                rule = Rule(**event['data'])
-                before = (list(self.rules), list(self.auto_rules), list(self.auto_pending))
-                occupied = {p.casefold() for p in rule.processes}
-                self.rules = [r for r in self.rules if not occupied.intersection(p.casefold() for p in r.processes)]
-                self.auto_rules = [r for r in self.auto_rules if not occupied.intersection(p.casefold() for p in r.processes)]
-                self.auto_pending = [item for item in self.auto_pending if str(item.get('process', '')).casefold() not in occupied]
-                self.rules.append(rule)
-                if self.persist():
-                    self.confirm_league_selection(rule)
-                    self.refresh_table()
-                    dlg.accept()
-                else:
-                    self.rules, self.auto_rules, self.auto_pending = before
-                    quick_message.setText('저장하지 못했습니다. 다시 시도해 주세요.')
-            self.quick_rule_callbacks[token] = complete
-            self.worker.submit('quick_game_mode', {'token': token, 'process': row['process'], 'game': canonical, 'session': session})
-
-        league = row['process'].casefold() in ('leagueclient.exe', 'league of legends.exe')
-        if league:
-            layout.addWidget(label('게임을 실행할 때마다 한 번 선택합니다. 닫으면 이번 실행의 자동 변경을 보류합니다.'))
-            choices = QHBoxLayout()
-            for title, canonical in (('롤', 'League of Legends'), ('롤토체스', 'Teamfight Tactics')):
-                button = action(title, lambda _checked=False, name=canonical: choose_mode(name), 'games', True)
-                quick_buttons.append(button)
-                choices.addWidget(button)
-            layout.addLayout(choices)
-        else:
-            def use_category():
-                if row.get('rule'):
-                    self.convert_rule('manual', row['process'])
-                    dlg.accept()
-                else:
-                    dlg.accept()
-                    self.edit_rule()
-            layout.addWidget(action('이 카테고리로 사용' if row.get('rule') else '카테고리 찾기', use_category, 'success', True))
-        other_category = action('다른 카테고리 선택', lambda: (dlg.accept(), self.edit_rule()), 'search')
-        layout.addWidget(other_category)
-        other_category.setVisible(not bool(prompt_event))
+        def use_category():
+            if row.get('rule'):
+                self.convert_rule('manual', row['process'])
+                dlg.accept()
+            else:
+                dlg.accept()
+                self.edit_rule()
+        layout.addWidget(action('이 카테고리로 사용' if row.get('rule') else '카테고리 찾기', use_category, 'success', True))
+        layout.addWidget(action('다른 카테고리 선택', lambda: (dlg.accept(), self.edit_rule()), 'search'))
         advanced_toggle = QPushButton('고급 설정 보기')
         advanced_toggle.setCheckable(True)
         layout.addWidget(advanced_toggle)
-        advanced_toggle.setVisible(not bool(prompt_event))
         body = QWidget()
         form = QFormLayout(body)
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
@@ -1119,16 +1038,7 @@ class ModernWindowMixin:
         tools.addWidget(action('저장', save_details, 'success', True))
         advanced_layout.addLayout(tools)
         layout.addWidget(action('닫기', dlg.reject, 'close'))
-        def clean_callbacks(*_):
-            for token in quick_tokens:
-                self.quick_rule_callbacks.pop(token, None)
-        dlg.finished.connect(clean_callbacks)
-        if prompt_event:
-            QTimer.singleShot(0, dlg.raise_)
-            QTimer.singleShot(0, dlg.activateWindow)
         dlg.exec()
-        if self.active_league_dialog is dlg:
-            self.active_league_dialog = None
         dlg.deleteLater()
 
     def choose_representative(self, process):
@@ -1360,23 +1270,6 @@ class ModernWindowMixin:
         if kind == 'steam_status':
             if hasattr(self, 'steam_status'):
                 self.steam_status.setText(event.get('text', 'Steam 연결 확인 대기'))
-            return
-        if kind == 'league_mode_required':
-            self.league_session_token = event['session']
-            self.league_selected_session = None
-            QTimer.singleShot(0, lambda: self.prompt_league_mode(event))
-            return
-        if kind == 'league_session_ended':
-            if event['session'] == self.league_session_token:
-                self.league_session_token = None
-                self.league_selected_session = None
-                if self.active_league_dialog is not None:
-                    self.active_league_dialog.reject()
-            return
-        if kind in ('quick_rule_ready', 'quick_rule_error'):
-            callback = self.quick_rule_callbacks.pop(event.get('token'), None)
-            if callback:
-                callback(event)
             return
         if kind == 'pipeline_remove' and hasattr(self, 'runtime_games'):
             self.runtime_games.pop(event.get('key'), None)

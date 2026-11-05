@@ -2,13 +2,13 @@ import queue
 import os
 import threading
 import time
-import uuid
 from PySide6.QtCore import QThread, Signal
 from api import ChzzkAPI, APIError
 from core import Rule, Gate, select_rule
 from autodetect import (DiscordAutoMapper, serialize_rules, cleanup_auto_mappings,
                         is_ignored_process, detectable_running_processes, game_process_details,
-                        category_choice_process_key, league_rule_processes)
+                        category_choice_process_key, game_rule_processes, migrate_riot_rules,
+                        TFT_EXECUTABLES)
 from process_detect import process_names as snapshot_process_names
 from storage import discord_cache_file, data_dir, get_steam_api_key, save_steam_api_key, steam_environment_key
 from steam_lookup import SteamResolver, SteamLookupError, valid_key
@@ -25,6 +25,9 @@ def process_names():
     # Anti-cheat friendly mode: read executable names from the Windows process
     # snapshot only. Never open game process handles or inspect memory/modules.
     names = {name for name in snapshot_process_names() if not is_ignored_process(name)}
+    # A running TFT client takes precedence over an idle League lobby.
+    if any(n.casefold() in TFT_EXECUTABLES for n in names):
+        names = {n for n in names if n.casefold() != 'leagueclient.exe'}
     return sorted(names, key=str.casefold)
 
 
@@ -64,8 +67,6 @@ class Worker(QThread):
         self.last_cookie_refresh = 0.0
         self.startup_talk_attempted = False
         self.session_rules = {}
-        self.league_session_token = None
-        self.league_confirmed_key = None
         self.category_choice_waiting = set()
         self.category_choice_dismissed = set()
         self.sanitize_auto_state(emit=False)
@@ -110,7 +111,8 @@ class Worker(QThread):
         previous = old.stage if old else None
         fields.update(steam_appid=int(game.get('steam_appid') or 0),
                       localized_name=game.get('steam_name_ko', ''),
-                      detection_source='Discord + Steam' if game.get('steam_appid') else 'Discord 게임 목록')
+                      detection_source=('실행 파일 호환 감지' if game.get('_source') == 'compatibility'
+                                        else 'Discord + Steam' if game.get('steam_appid') else 'Discord 게임 목록'))
         self.pipeline.transition(game, process, stage, **fields)
         if stage != previous:
             key = (str(game.get('id') or game.get('name') or process), category_choice_process_key(process))
@@ -133,7 +135,9 @@ class Worker(QThread):
         records = self.mapper.entries.get(rule.process.casefold(), [])
         game = dict(records[0]) if len(records) == 1 else {'name': rule.game_name or rule.process, 'discord_name': ''}
         if rule.game_name.casefold() == 'teamfight tactics' or rule.category_id.casefold() in ('teamfight_tactics', 'teamfighttactics'):
-            game = {'name': 'Teamfight Tactics', 'discord_name': str(game.get('discord_name', game.get('name', '')))}  # Explicit stored category, not process inference.
+            # Keep the independent TFT client's Discord identity across discovery
+            # and application so its runtime row and activity counter stay unique.
+            game.update(name='Teamfight Tactics', discord_name=str(game.get('discord_name', game.get('name', ''))))
         game['processes'] = rule.processes
         return game
 
@@ -229,6 +233,8 @@ class Worker(QThread):
                     self.emit('category_choice_required', **{k: item[k] for k in ('token', 'process', 'game_name', 'candidates')})
 
     def sanitize_auto_state(self, emit=True):
+        for key in ('rules', 'auto_rules'):
+            self.config[key] = migrate_riot_rules(self.config.get(key, []))
         rules, pending, removed = cleanup_auto_mappings(
             self.config.get('auto_rules', []),
             self.config.get('auto_pending', []),
@@ -300,22 +306,7 @@ class Worker(QThread):
             token for token in self.category_choice_waiting
             if token.split('|', 1)[0] in active
         }
-        self.update_league_session()
         return self.processes
-
-    def update_league_session(self):
-        running = [p for p in self.processes if p.casefold() in ('leagueclient.exe', 'league of legends.exe')]
-        if self.config.get('league_mode', 'legacy') != 'ask':
-            return
-        if not running and self.league_session_token:
-            token = self.league_session_token
-            self.league_session_token = None
-            self.league_confirmed_key = None
-            self.emit('league_session_ended', session=token)
-        elif running and not self.league_session_token:
-            self.league_session_token = uuid.uuid4().hex
-            self.league_confirmed_key = None
-            self.emit('league_mode_required', session=self.league_session_token, process=running[0])
 
     def publish_running_games(self):
         manual = [Rule(**r) for r in self.config.get('rules', [])]
@@ -337,12 +328,12 @@ class Worker(QThread):
                     self.pipeline.transition(game, r.process, '감지됨')
 
     def running_game_processes(self):
-        """Return only currently-running executables known as games by Discord.
+        """Return currently-running executables from the supported game index.
 
         The manual rule dialog must not show every Windows process (compiler, shell,
         Python, etc.).  We still keep ``self.processes`` as the complete conservative
         process-name snapshot for rule matching, but the UI receives only the
-        intersection with Discord's detectable game executable index.
+        intersection with the game index, including confirmed compatibility entries.
         """
         self.refresh_processes()
         info = self.mapper.ensure_index()
@@ -378,11 +369,8 @@ class Worker(QThread):
         self.publish_running_games()
         if info.get('error'):
             self.emit('log', text='[자동 감지] Discord 목록 갱신 실패: ' + info['error'])
-        discover_processes = [p for p in self.processes if not (self.config.get('league_mode', 'legacy') == 'ask'
-                              and not self.league_confirmed_key
-                              and p.casefold() in ('leagueclient.exe', 'league of legends.exe'))]
         new_rules, unresolved = self.mapper.discover(
-            discover_processes,
+            self.processes,
             self.effective_rules(),
             lambda keyword: self.client().search(keyword, self.chzzk_open),
         )
@@ -440,17 +428,6 @@ class Worker(QThread):
                 continue
             normal_pending.append(item)
 
-        # A saved automatic category does not resolve a shared LoL/TFT executable.
-        # Keep the current session's mode prompt until a manual/session rule resolves it.
-        if self.config.get('league_mode', 'legacy') == 'ask':
-            confirmed = {'league-of-legends'} if self.league_confirmed_key else set()
-            for item in self.config.get('auto_pending', []):
-                if (isinstance(item, dict) and item.get('reason') == 'multi-game'
-                        and str(item.get('process', '')).casefold() in ('leagueclient.exe', 'league of legends.exe')
-                        and category_choice_process_key(item['process']) not in confirmed
-                        and active.intersection(('leagueclient.exe', 'league of legends.exe'))):
-                    normal_pending.append(item)
-
         # Deduplicate the current scan only. A process that stopped running, was resolved,
         # or disappeared from Discord detection is removed from the pending count here.
         pending = []
@@ -500,14 +477,6 @@ class Worker(QThread):
     def scan(self):
         self.refresh_processes()
         now = time.monotonic()
-        if self.league_session_token and not self.league_confirmed_key:
-            for state in list(self.pipeline.states.values()):
-                if state.running and any(p.casefold() in ('leagueclient.exe', 'league of legends.exe') for p in state.processes):
-                    self.pipeline.transition({'id': state.key, 'name': state.game_name, 'processes': state.processes},
-                                             state.process, '확인 필요', error='이번 실행의 게임 모드를 선택해 주세요.')
-            self.gate.observe(None, now)
-            self.status('LoL / TFT 게임 모드를 먼저 선택해 주세요')
-            return
         self.apply_startup_talk_once()
         self.maybe_sync_auto(now)
         # Fresh names defeat results arriving after game exit or replacement.
@@ -527,14 +496,6 @@ class Worker(QThread):
                 self.status('감지 중 · 실행 중인 게임이 없습니다.')
             return
         game = self.rule_game(rule)
-        # LoL and TFT share executables. Name-only scans must never infer the mode.
-        if (self.config.get('league_mode', 'legacy') == 'ask'
-                and any(p.casefold() in ('leagueclient.exe', 'league of legends.exe') for p in rule.processes)
-                and self.league_confirmed_key != rule.key):
-            self.pipeline.transition(game, rule.process, '확인 필요', error='이번 실행에서 롤 / 롤토체스를 먼저 선택해 주세요.')
-            self.gate.observe(None, now)
-            self.status('LoL / TFT 게임 모드를 먼저 선택해 주세요')
-            return
         if not self.validate_rule(rule) or self.cancel.is_set():
             self.gate.observe(None, time.monotonic())
             self.status('카테고리 검증 대기 · ' + rule.category_name)
@@ -618,65 +579,6 @@ class Worker(QThread):
         elif name == 'check':
             current = self.client().settings()
             self.emit('checked', text='연결 성공 · ' + str((current.get('category') or {}).get('categoryValue', '카테고리 없음')), category_name=str((current.get('category') or {}).get('categoryValue') or '카테고리 없음'))
-        elif name == 'quick_game_mode':
-            import unicodedata
-            from normalization import normalized_name
-            targets = {'League of Legends': ('리그 오브 레전드', 'League of Legends'),
-                       'Teamfight Tactics': ('전략적 팀 전투', 'Teamfight Tactics')}
-            token = value.get('token')
-            game = value.get('game')
-            process = value.get('process', '')
-            try:
-                if game not in targets or process.casefold() not in ('leagueclient.exe', 'league of legends.exe'):
-                    raise ValueError('Invalid game selection')
-                session = value.get('session')
-                if session:
-                    self.refresh_processes(force=True)
-                    if session != self.league_session_token:
-                        raise ValueError('Game session ended')
-                exact = {}
-                for query in targets[game]:
-                    rows = self.mapper._cached_search(query, lambda q: self.client().search(q, self.chzzk_open))
-                    for c in rows:
-                        candidate_name = c.get('categoryValue', '')
-                        # TFT's CHZZK title includes the current set/season subtitle.
-                        # Scope this exception to explicit TFT selection; other editions remain distinct.
-                        if game == 'Teamfight Tactics':
-                            candidate_name = unicodedata.normalize('NFKC', str(candidate_name)).partition(':')[0]
-                        if (c.get('categoryId') and c.get('categoryType', 'GAME') == 'GAME'
-                                and normalized_name(candidate_name) in {normalized_name(n) for n in targets[game]}):
-                            exact[c['categoryId']] = c
-                    if exact:
-                        break
-                if len(exact) != 1 or self.cancel.is_set():
-                    raise ValueError('Category could not be uniquely verified')
-                if session:
-                    self.refresh_processes(force=True)
-                    if session != self.league_session_token:
-                        raise ValueError('Game session ended')
-                c = next(iter(exact.values()))
-                rule = Rule(process, c['categoryId'], c['categoryValue'], 'GAME', game,
-                            '사용자 카테고리 선택 · 검색 결과 검증',
-                            tuple(p for p in ('LeagueClient.exe', 'League of Legends.exe') if p.casefold() != process.casefold()))
-                self.emit('quick_rule_ready', token=token, session=session, data=asdict(rule))
-            except Exception as exc:
-                self.emit('log', text='[카테고리 검색] 빠른 게임 선택 실패: ' + str(exc))
-                self.emit('quick_rule_error', token=token, text='카테고리를 확인하지 못했습니다. 다시 누르거나 다른 카테고리를 선택해 주세요.')
-        elif name == 'confirm_league_mode':
-            self.refresh_processes(force=True)
-            if value.get('session') != self.league_session_token or not self.league_session_token:
-                return
-            rule = Rule(**value['rule'])
-            if not any(p.casefold() in ('leagueclient.exe', 'league of legends.exe') for p in rule.processes):
-                return
-            # Only a rule actually persisted by the UI can unblock this session.
-            if not any(r.key == rule.key and set(r.processes) == set(rule.processes) for r in self.effective_rules()):
-                return
-            self.league_confirmed_key = rule.key
-            self.config['auto_pending'] = [p for p in self.config.get('auto_pending', [])
-                                           if str(p.get('process', '')).casefold() not in ('leagueclient.exe', 'league of legends.exe')]
-            self.emit('auto_pending', data=self.config['auto_pending'])
-            self.gate = Gate(stable=self.gate.stable, cooldown=self.gate.cooldown)
         elif name == 'search':
             data = self.mapper._cached_search(value['keyword'], lambda query: self.client().search(query, self.chzzk_open))
             self.emit('search', request=value['request'], data=data,
@@ -757,7 +659,7 @@ class Worker(QThread):
                 )
                 rule = Rule(rule.process, rule.category_id, rule.category_name,
                             rule.category_type, rule.game_name, rule.match_source,
-                            tuple(p for p in league_rule_processes(rule)
+                            tuple(p for p in game_rule_processes(rule)
                                   if p.casefold() != rule.process.casefold()))
                 if save_rule:
                     auto_rules = [Rule(**r) for r in self.config.get('auto_rules', [])]
