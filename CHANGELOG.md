@@ -5,8 +5,28 @@
 
 ## 미배포
 
+- 아직 기록할 변경 사항이 없습니다.
+
+## [4.12.16](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.16) — 2026-11-05 (KST)
+
+### 변경 사항
+
 - 독립 롤체 클라이언트 `TFTClient-Win64-Shipping.exe`를 기본 감지 목록에 추가하고 롤·롤체 선택창을 제거해 실행 파일로 자동 구분합니다. 롤 대기실과 롤체가 함께 열려 있으면 롤체를 우선합니다.
 - 기존에 롤 실행 파일에 저장한 롤체 연결을 새 실행 파일로 이전하고, 시즌명이 붙은 롤체 카테고리도 실제 검색 결과의 이름과 ID를 검증합니다.
+
+### 커밋
+
+- \[cancel obsolete builds\] Release 4.12.16 with automatic League and standalone TFT detection ([d17e666](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/d17e666f9b4483ffc56ca4e0d3685a1b5712bb17))
+- Merge pull request #7 from chzzk-dev/fix/riot-standalone-auto-detection ([26e04cf](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/26e04cf47d242ca26692f4a3600a9aedfb1defd9))
+- Detect standalone TFT and League automatically and migrate shared-client mappings ([0fd2353](https://github.com/chzzk-dev/CHZZK-Auto-Category/commit/0fd2353861edca5a00be53a02af6c8afbf1d39ad))
+
+[전체 변경 비교](https://github.com/chzzk-dev/CHZZK-Auto-Category/compare/v4.12.15...v4.12.16)
+
+### 설치 파일
+
+- `ChzzkAutoCategory-4.12.16.msi`
+- `SHA256SUMS.txt`에서 설치 파일의 SHA-256을 확인할 수 있습니다.
+- 기존 MSI 설치본은 새 MSI로 업그레이드하며 사용자 설정을 유지합니다.
 
 ## [4.12.15](https://github.com/chzzk-dev/CHZZK-Auto-Category/releases/tag/v4.12.15) — 2026-10-24 (KST)
 
