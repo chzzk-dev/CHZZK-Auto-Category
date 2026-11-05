@@ -383,7 +383,7 @@ class ModernUiTests(unittest.TestCase):
             dlg = next(d for d in w.findChildren(QDialog) if d.isVisible())
             results.append(not any(x.isVisible() for x in dlg.findChildren(QLineEdit)))
             titles = [b.text() for b in dlg.findChildren(QPushButton) if b.isVisible()]
-            results.append('롤' in titles and '롤토체스' in titles)
+            results.append('롤' not in titles and '롤토체스' not in titles)
             next(b for b in dlg.findChildren(QPushButton) if b.text() == '고급 설정 보기').click()
             results.append(any(x.isVisible() for x in dlg.findChildren(QLineEdit)))
             dlg.reject()
@@ -391,27 +391,26 @@ class ModernUiTests(unittest.TestCase):
         w.show_game_details()
         self.assertEqual(results, [True, True, True])
 
-    def test_tft_button_saves_manual_mode_without_another_dialog(self):
+    def test_tft_details_describe_independent_automatic_detection(self):
         from PySide6.QtCore import QTimer
-        from PySide6.QtWidgets import QDialog, QPushButton
-        from dataclasses import asdict
+        from PySide6.QtWidgets import QDialog, QPushButton, QLabel
         w = self.window
-        w.auto_rules = [Rule('LeagueClient.exe', 'lol', '리그 오브 레전드', game_name='League of Legends')]
+        w.auto_rules = [Rule('TFTClient-Win64-Shipping.exe', 'actual-tft', '전략적 팀 전투 : 새 시즌', game_name='Teamfight Tactics')]
         w.refresh_table()
         w.table.selectRow(0)
-        def reply(name, value=None):
-            if name == 'quick_game_mode':
-                rule = Rule('LeagueClient.exe', 'actual-tft', '전략적 팀 전투', game_name='Teamfight Tactics', process_aliases=('League of Legends.exe',))
-                w.on_event({'kind': 'quick_rule_ready', 'token': value['token'], 'data': asdict(rule)})
-        def choose():
-            dlg = next(d for d in w.findChildren(QDialog) if d.isVisible())
-            next(b for b in dlg.findChildren(QPushButton) if b.text() == '롤토체스').click()
-        with patch.object(w.worker, 'submit', side_effect=reply):
-            QTimer.singleShot(0, choose)
+        observed = []
+        def inspect():
+            dlg = QApplication.activeModalWidget()
+            titles = [b.text() for b in dlg.findChildren(QPushButton) if b.isVisible()]
+            observed.append('롤' not in titles and '롤토체스' not in titles)
+            observed.append(any('자동으로 구분' in label.text() for label in dlg.findChildren(QLabel)))
+            dlg.reject()
+        with patch.object(w.worker, 'submit') as submit:
+            QTimer.singleShot(0, inspect)
             w.show_game_details()
-        self.assertEqual(w.rules[0].category_id, 'actual-tft')
-        self.assertEqual(w.auto_rules, [])
-        self.assertEqual(w.quick_rule_callbacks, {})
+            self.assertFalse(any(c.args[0] in ('quick_game_mode', 'confirm_league_mode') for c in submit.call_args_list))
+        self.assertEqual(observed, [True, True])
+        self.assertEqual(w.auto_rules[0].processes, ('TFTClient-Win64-Shipping.exe',))
 
     def test_toggle_supports_keyboard_and_disabled_state(self):
         from ui_components import ToggleSwitch
@@ -471,36 +470,29 @@ class ModernUiTests(unittest.TestCase):
             dlg.reject()
             dlg.deleteLater()
 
-    def test_first_league_prompt_is_simple_and_closes_when_game_exits(self):
-        from PySide6.QtCore import QTimer, Qt
-        from PySide6.QtWidgets import QDialog, QPushButton, QLineEdit
+    def test_tft_pipeline_updates_dashboard_without_mode_dialog(self):
+        from PySide6.QtWidgets import QDialog
         w = self.window
-        w.league_session_token = 'session'
-        observed = []
-        def inspect():
-            dlg = QApplication.activeModalWidget()
-            observed.append(bool(dlg.windowFlags() & Qt.WindowType.FramelessWindowHint))
-            observed.append({b.text() for b in dlg.findChildren(QPushButton) if b.isVisible()} == {'롤', '롤토체스', '닫기'})
-            observed.append(not any(e.isVisible() for e in dlg.findChildren(QLineEdit)))
-            w.on_event({'kind': 'league_session_ended', 'session': 'session'})
-        QTimer.singleShot(0, inspect)
-        w.prompt_league_mode({'session': 'session', 'process': 'LeagueClient.exe'})
-        self.assertEqual(observed, [True, True, True])
-        self.assertIsNone(w.league_session_token)
-        self.assertIsNone(w.active_league_dialog)
-        self.assertEqual(w.quick_rule_callbacks, {})
+        w.on_event({'kind': 'pipeline_state', 'data': {
+            'key': 'tft', 'game_name': 'Teamfight Tactics', 'process': 'TFTClient-Win64-Shipping.exe',
+            'processes': ('TFTClient-Win64-Shipping.exe',), 'stage': '연결 완료', 'running': True,
+            'category_id': 'live-tft', 'category_name': '전략적 팀 전투 : 새 시즌'}})
+        self.app.processEvents()
+        self.assertFalse(any(d.isVisible() for d in w.findChildren(QDialog)))
+        self.assertEqual(w.runtime_games['tft']['category_id'], 'live-tft')
 
-    def test_explicit_mode_choice_confirms_current_session_only(self):
-        from dataclasses import asdict
+    def test_manual_tft_selection_migrates_shared_lol_process(self):
+        from main import RuleDialog
         w = self.window
-        rule = Rule('LeagueClient.exe', 'tft', '전략적 팀 전투', game_name='Teamfight Tactics')
-        w.league_session_token = 'new-session'
-        with patch.object(w.worker, 'submit') as submit:
-            w.confirm_league_selection(rule)
-            submit.assert_called_once_with('confirm_league_mode', {'session': 'new-session', 'rule': asdict(rule)})
-            with patch.object(w, 'show_game_details') as show:
-                w.prompt_league_mode({'session': 'new-session', 'process': 'LeagueClient.exe'})
-                show.assert_not_called()
+        dialog = RuleDialog(w)
+        dialog.process.setEditText('LeagueClient.exe')
+        dialog.selected = {'categoryId': 'live-tft', 'categoryValue': '전략적 팀 전투 : 새 시즌', 'categoryType': 'GAME'}
+        dialog.save()
+        self.assertEqual(dialog.result_rule.processes, ('TFTClient-Win64-Shipping.exe',))
+        self.assertEqual(dialog.result_rule.game_name, 'Teamfight Tactics')
+        self.assertEqual(dialog.result_rule.category_id, 'live-tft')
+        dialog.detach()
+        dialog.deleteLater()
 
     def test_file_picker_is_non_native_and_has_no_os_title_bar(self):
         from PySide6.QtCore import Qt

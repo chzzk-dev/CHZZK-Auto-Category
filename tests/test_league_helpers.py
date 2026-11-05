@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
-from autodetect import (cleanup_auto_mappings, detectable_running_processes,
+from autodetect import (TFT_EXECUTABLES, cleanup_auto_mappings, detectable_running_processes,
                         parse_detectable_index, with_game_client_compatibility)
 from core import Rule, Gate
 from main import Window
@@ -39,7 +39,7 @@ class LeagueHelperTests(unittest.TestCase):
         stale = {name.casefold(): [{'name': 'League of Legends', 'aliases': []}]
                  for name in [*CLIENTS, LOBBY, MATCH, 'LeagueHelper.exe']}
         entries = with_game_client_compatibility(stale)
-        self.assertEqual(set(entries), {MATCH.casefold(), LOBBY.casefold()})
+        self.assertEqual(set(entries), {MATCH.casefold(), LOBBY.casefold(), *TFT_EXECUTABLES})
         self.assertEqual(detectable_running_processes([*CLIENTS, MATCH], entries), [MATCH])
 
     def test_duplicate_saved_rules_and_pending_clients_are_migrated_once(self):
@@ -54,11 +54,11 @@ class LeagueHelperTests(unittest.TestCase):
         again, _, _ = cleanup_auto_mappings([asdict(rules[0])], [])
         self.assertEqual(again, rules)
 
-    def test_manual_match_rule_takes_precedence_over_migration(self):
+    def test_saved_tft_manual_rule_no_longer_occupies_lol_match(self):
         old = Rule(CLIENTS[0], CATEGORY['categoryId'], CATEGORY['categoryValue'], game_name='League of Legends')
         manual = Rule(MATCH, 'Teamfight_Tactics', '전략적 팀 전투')
         rules, _, _ = cleanup_auto_mappings([asdict(old)], [], [asdict(manual)])
-        self.assertEqual([r.processes for r in rules], [(LOBBY,)])
+        self.assertEqual([r.processes for r in rules], [(MATCH, LOBBY)])
 
     def test_client_churn_causes_no_search_or_popup_then_match_applies_once(self):
         worker = self.worker()

@@ -4,7 +4,8 @@ from collections import OrderedDict
 import ntpath
 import re
 import time
-from dataclasses import asdict
+import unicodedata
+from dataclasses import asdict, replace
 from difflib import SequenceMatcher
 from pathlib import Path
 import requests
@@ -114,8 +115,35 @@ LEAGUE_EXECUTABLES = ('league of legends.exe', 'leagueclient.exe')
 LEAGUE_CLIENT_EXECUTABLES = ('leagueclientux.exe', 'leagueclientuxrender.exe')
 GENERIC_EXECUTABLES.update(LEAGUE_CLIENT_EXECUTABLES)
 LEAGUE_NAMES = ('League of Legends', '리그 오브 레전드', 'LoL')
+TFT_EXECUTABLES = ('tftclient-win64-shipping.exe',)
+TFT_NAMES = ('Teamfight Tactics', '전략적 팀 전투', '롤토체스', '롤체', 'TFT')
 for _league_exe in LEAGUE_EXECUTABLES:
     LOCALIZED_SEARCH_OVERRIDES[_league_exe] = ('리그 오브 레전드',)
+for _tft_exe in TFT_EXECUTABLES:
+    LOCALIZED_SEARCH_OVERRIDES[_tft_exe] = ('전략적 팀 전투',)
+
+
+def riot_game_for_process(process):
+    key = process_basename(process).casefold()
+    if key in LEAGUE_EXECUTABLES:
+        return LEAGUE_NAMES[0]
+    if key in TFT_EXECUTABLES:
+        return TFT_NAMES[0]
+    return ''
+
+
+def riot_category_identity(category, game_name):
+    if category.get('categoryType', 'GAME') != 'GAME':
+        return False
+    if game_name == TFT_NAMES[0]:
+        # CHZZK appends the current TFT set after a colon. Preserve its actual
+        # title and ID; only compare the base title for this specific game.
+        title = unicodedata.normalize('NFKC', str(category.get('categoryValue') or ''))
+        return normalize_name(title.partition(':')[0]) in {
+            normalize_name(name) for name in TFT_NAMES[:2]}
+    if game_name == LEAGUE_NAMES[0]:
+        return exact_category_identity(category, LEAGUE_NAMES)
+    return False
 
 
 def with_game_client_compatibility(entries):
@@ -128,17 +156,22 @@ def with_game_client_compatibility(entries):
                 or key.casefold() in LEAGUE_EXECUTABLES]
         if kept:
             result[key] = kept
-    for executable in LEAGUE_EXECUTABLES:
-        records = result.setdefault(executable, [])
-        matching = [i for i, item in enumerate(records)
-                    if str(item.get('name') or '').casefold() == 'league of legends']
-        if matching:
-            i = matching[0]
-            record = dict(records[i])
-            record['aliases'] = list(dict.fromkeys([*LEAGUE_NAMES[1:], *record.get('aliases', [])]))[:8]
-            records[i] = record
-        else:
-            records.append({'name': LEAGUE_NAMES[0], 'aliases': list(LEAGUE_NAMES[1:]), '_source': 'compatibility', 'discord_name': ''})
+    for executable in (*LEAGUE_EXECUTABLES, *TFT_EXECUTABLES):
+        names = TFT_NAMES if executable in TFT_EXECUTABLES else LEAGUE_NAMES
+        other_names = LEAGUE_NAMES if executable in TFT_EXECUTABLES else TFT_NAMES
+        records = result.get(executable, [])
+        record = next((dict(item) for item in records
+                       if normalize_name(item.get('name')) == normalize_name(names[0])), None)
+        if record is None:
+            record = {'_source': 'compatibility', 'discord_name': ''}
+        elif not record.get('id'):
+            record.update(_source='compatibility', discord_name='')
+        aliases = [a for a in record.get('aliases', [])
+                   if normalize_name(a) not in {normalize_name(n) for n in other_names}]
+        record.update(name=names[0], aliases=list(dict.fromkeys([*names[1:], *aliases]))[:8])
+        # The split PC clients have unambiguous executable names. Old Discord
+        # caches may still associate the League binaries with both games.
+        result[executable] = [record]
     return result
 
 
@@ -171,14 +204,41 @@ def exact_category_identity(category, names):
     })
 
 
-def league_rule_processes(rule):
-    category = {'categoryId': rule.category_id, 'categoryValue': rule.category_name}
-    if (normalize_name(rule.game_name) == normalize_name(LEAGUE_NAMES[0])
-            and any(p.casefold() in (*LEAGUE_EXECUTABLES, *LEAGUE_CLIENT_EXECUTABLES)
-                    for p in rule.processes)
-            and exact_category_identity(category, LEAGUE_NAMES)):
+def game_rule_processes(rule):
+    category = {'categoryId': rule.category_id, 'categoryValue': rule.category_name,
+                'categoryType': rule.category_type}
+    keys = {process_basename(p).casefold() for p in rule.processes}
+    if not keys.intersection((*LEAGUE_EXECUTABLES, *LEAGUE_CLIENT_EXECUTABLES, *TFT_EXECUTABLES)):
+        return rule.processes
+    if riot_category_identity(category, TFT_NAMES[0]):
+        return ('TFTClient-Win64-Shipping.exe',)
+    if riot_category_identity(category, LEAGUE_NAMES[0]):
         return ('League of Legends.exe', 'LeagueClient.exe')
     return rule.processes
+
+
+def migrate_riot_rules(rules):
+    """Move saved shared-client TFT mappings to its independent executable."""
+    result = []
+    for raw in rules:
+        rule = _coerce_rule(raw)
+        if rule is None:
+            result.append(raw)
+            continue
+        processes = game_rule_processes(rule)
+        name = riot_game_for_process(processes[0])
+        category = {'categoryId': rule.category_id, 'categoryValue': rule.category_name,
+                    'categoryType': rule.category_type}
+        if (processes != rule.processes
+                or (riot_category_identity(category, name) and rule.game_name != name)):
+            rule = replace(rule, process=processes[0], process_aliases=processes[1:],
+                           game_name=name or rule.game_name)
+            value = asdict(rule)
+        else:
+            value = raw if isinstance(raw, dict) else asdict(rule)
+        if not name or value not in result:
+            result.append(value)
+    return result
 
 
 def category_choice_process_key(process):
@@ -341,6 +401,9 @@ def _candidate_identity_score(category, game_name, aliases=None, process_name=''
     RePOP).  Identity has to be established from the Discord game name/aliases or the
     executable stem before a category is eligible for automatic selection.
     """
+    riot_game = riot_game_for_process(process_name)
+    if riot_game and normalize_name(game_name) == normalize_name(riot_game):
+        return 600 if riot_category_identity(category, riot_game) else 0
     aliases = aliases or []
     if edition_conflict([game_name, *aliases], category):
         return 0
@@ -593,7 +656,7 @@ def _merge_rule_processes(rules):
 
 
 def cleanup_auto_mappings(auto_rules, auto_pending, manual_rules=None):
-    manual_keys = _rule_process_keys(manual_rules or [])
+    manual_keys = _rule_process_keys(migrate_riot_rules(manual_rules or []))
     cleaned_rules = []
     seen_processes = set()
     removed_rules = 0
@@ -605,7 +668,7 @@ def cleanup_auto_mappings(auto_rules, auto_pending, manual_rules=None):
             continue
 
         valid_processes = []
-        for value in league_rule_processes(rule):
+        for value in game_rule_processes(rule):
             process = process_basename(value)
             if not process or is_ignored_process(process):
                 continue
@@ -878,7 +941,10 @@ class DiscordAutoMapper:
                        and c.get('categoryType') in ('GAME', 'ETC', 'SPORTS')
                        and c.get('categoryId') and c.get('categoryValue')]
             for rank, category in enumerate(options[:30]):
-                if edition_conflict([game_name, *aliases], category):
+                riot_game = riot_game_for_process(process)
+                if riot_game and not riot_category_identity(category, riot_game):
+                    continue
+                if not riot_game and edition_conflict([game_name, *aliases], category):
                     continue
                 identity = _candidate_identity_score(category, game_name, aliases, process, keyword)
 
@@ -934,7 +1000,8 @@ class DiscordAutoMapper:
         identity_names = [game_name, *aliases,
                           *LOCALIZED_SEARCH_OVERRIDES.get(process_basename(process).casefold(), ())]
         exact = [item for item in ranked
-                 if exact_category_identity(item['category'], identity_names)]
+                 if (riot_category_identity(item['category'], riot_game_for_process(process))
+                     or exact_category_identity(item['category'], identity_names))]
         if exact:
             return exact[:5]
         # LoL spin-offs share words with the original title but are different games.
@@ -957,6 +1024,9 @@ class DiscordAutoMapper:
             self.observer(game, process, '분석 중')
         if self.category_cache:
             cached = self.category_cache.get(key, fingerprint, self.category_ttl)
+            riot_game = riot_game_for_process(process)
+            if cached and riot_game and not riot_category_identity(cached['category'], riot_game):
+                cached = None
             if cached:
                 category = dict(cached['category'], _verifiedAt=cached['verified_at'])
                 if self.observer:
@@ -988,7 +1058,11 @@ class DiscordAutoMapper:
         ambiguous = len(korean_ranked) >= 2
 
         identity = int(top.get('identity') or top['category'].get('_identityScore') or 0)
-        confident = len(effective_ranked) == 1 and exact_category_identity(top['category'], [game.get('name'), *game.get('aliases', []), *self.user_aliases.get(game.get('name', ''), []), *LOCALIZED_SEARCH_OVERRIDES.get(process.casefold(), ())])
+        confident = len(effective_ranked) == 1 and (
+            riot_category_identity(top['category'], riot_game_for_process(process))
+            or exact_category_identity(top['category'], [game.get('name'), *game.get('aliases', []),
+                *self.user_aliases.get(game.get('name', ''), []),
+                *LOCALIZED_SEARCH_OVERRIDES.get(process.casefold(), ())]))
 
         # CHZZK의 localized categoryId가 Discord 영문 게임명과 직접 닮지 않는
         # 경우가 있습니다. 예: VRChat.exe / Discord 'VRChat' -> 한국어 'VR챗'.
@@ -1060,6 +1134,9 @@ class DiscordAutoMapper:
                 game = options[0]
                 fingerprint = json.dumps([game.get('name'), game.get('id'), list(dict.fromkeys([*game.get('aliases', []), *self.user_aliases.get(game.get('name', ''), [])]))], ensure_ascii=False, sort_keys=True)
                 cached = self.category_cache.get(game_key(game, basename), fingerprint, self.category_ttl, offline=True) if self.category_cache and self.last_search_error else None
+                riot_game = riot_game_for_process(basename)
+                if cached and riot_game and not riot_category_identity(cached['category'], riot_game):
+                    cached = None
                 if cached and not self.cancelled():
                     matches.append((game, {'category': dict(cached['category'], _verifiedAt=cached['verified_at']), 'score': 600, 'confident': True, 'count': 1, 'ambiguous': False, 'candidates': [cached['category']]}))
             if not matches:
@@ -1139,7 +1216,7 @@ class DiscordAutoMapper:
                                  if len(self.entries.get(p.casefold(), [])) == 1
                                  and str(self.entries[p.casefold()][0].get('id') or normalize_name(self.entries[p.casefold()][0].get('name')))
                                  == str(selected_game.get('id') or normalize_name(game_name))]
-            aliases = tuple(p for p in dict.fromkeys([*league_rule_processes(rule), *related_processes])
+            aliases = tuple(p for p in dict.fromkeys([*game_rule_processes(rule), *related_processes])
                             if p.casefold() != key and p.casefold() not in existing
                             and len(self.entries.get(p.casefold(), [])) == 1
                             and normalize_name(self.entries[p.casefold()][0].get('name', ''))

@@ -632,10 +632,13 @@ class RuleDialog(QDialog):
                 match_source,
                 getattr(getattr(self, 'existing_rule', None), 'process_aliases', ()),
             )
-            from normalization import normalized_name
-            if self.result_rule.process.casefold() in ('leagueclient.exe', 'league of legends.exe') and normalized_name(self.result_rule.category_name) in ('리그오브레전드', '전략적팀전투'):
-                from dataclasses import replace
-                self.result_rule = replace(self.result_rule, process_aliases=tuple(p for p in ('League of Legends.exe', 'LeagueClient.exe') if p.casefold() != self.result_rule.process.casefold()))
+            from autodetect import game_rule_processes, riot_game_for_process
+            from dataclasses import replace
+            processes = game_rule_processes(self.result_rule)
+            if processes != self.result_rule.processes:
+                self.result_rule = replace(self.result_rule, process=processes[0],
+                                           process_aliases=processes[1:],
+                                           game_name=riot_game_for_process(processes[0]))
         except ValueError as e:
             show_warning(self, '입력 확인', str(e))
             return
